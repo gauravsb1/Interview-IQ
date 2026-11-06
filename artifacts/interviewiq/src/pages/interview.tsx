@@ -10,6 +10,7 @@ import { RequireAuth, ErrorState, PageSkeleton, ScoreRing } from "@/components/b
 import { Textarea } from "@/components/ui/textarea";
 import { useRecorder, MAX_SECONDS } from "@/hooks/use-recorder";
 import { useAnswerDraft } from "@/hooks/use-answer-draft";
+import { InterviewCamera } from "@/components/interview-camera";
 import { errMsg, CATEGORY_LABEL } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -250,6 +251,7 @@ function Room({ id }: { id: string }) {
             <li><b className="text-foreground">R</b>esult with a number</li>
           </ul>
         </div>
+        {!allAnswered && <InterviewCamera />}
         {!allAnswered && answered > 0 && (
           <button onClick={doFinish} disabled={busy || rec.state === "recording" || rec.state === "requesting"} className="w-full rounded-full border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-50" data-testid="button-end-early">
             {finish.isPending ? "Finishing" : "End session early"}
