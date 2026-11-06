@@ -88,6 +88,20 @@ def initialize():
                     REFERENCES iq_users(id) ON DELETE CASCADE,
                 CONSTRAINT chat_uploads_message_fk FOREIGN KEY (message_id)
                     REFERENCES messages(id) ON DELETE SET NULL)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS friend_requests (
+                id VARCHAR(36) PRIMARY KEY,
+                pair_key VARCHAR(73) NOT NULL UNIQUE,
+                sender_id VARCHAR(36) NOT NULL,
+                recipient_id VARCHAR(36) NOT NULL,
+                status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                responded_at DATETIME NULL,
+                INDEX friend_requests_recipient_status (recipient_id, status, created_at),
+                INDEX friend_requests_sender_status (sender_id, status, created_at),
+                CONSTRAINT friend_requests_sender_fk FOREIGN KEY (sender_id)
+                    REFERENCES iq_users(id) ON DELETE CASCADE,
+                CONSTRAINT friend_requests_recipient_fk FOREIGN KEY (recipient_id)
+                    REFERENCES iq_users(id) ON DELETE CASCADE)""")
             cur.executemany("""INSERT INTO chat_rooms
                 (id, name, description, is_public, direct_key, created_by)
                 VALUES (%s, %s, %s, 1, NULL, NULL)

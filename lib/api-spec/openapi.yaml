@@ -339,6 +339,51 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ChatRoomsResponse"}
+  /chat/friends:
+    get:
+      operationId: getChatFriends
+      responses:
+        "200":
+          description: Accepted friends and pending friend requests for the authenticated user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatFriendsResponse"}
+  /chat/friend-requests:
+    post:
+      operationId: sendFriendRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FriendRequestInput"}
+      responses:
+        "200":
+          description: Friend request state for the selected student
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FriendRequestResult"}
+  /chat/friend-requests/{request_id}/accept:
+    parameters:
+      - {name: request_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: acceptFriendRequest
+      responses:
+        "200":
+          description: Friend request accepted
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FriendActionResult"}
+  /chat/friend-requests/{request_id}/decline:
+    parameters:
+      - {name: request_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: declineFriendRequest
+      responses:
+        "200":
+          description: Friend request declined
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FriendActionResult"}
   /chat/students:
     get:
       operationId: searchChatStudents
@@ -775,6 +820,38 @@ components:
       required: [students]
       properties:
         students: {type: array, items: {$ref: "#/components/schemas/ChatStudent"}}
+    ChatFriendRequest:
+      type: object
+      required: [id, userId, name, createdAt]
+      properties:
+        id: {type: string}
+        userId: {type: string}
+        name: {type: string}
+        createdAt: {type: string, format: date-time}
+    ChatFriendsResponse:
+      type: object
+      required: [friends, incomingRequests, outgoingRequests]
+      properties:
+        friends: {type: array, items: {$ref: "#/components/schemas/ChatStudent"}}
+        incomingRequests: {type: array, items: {$ref: "#/components/schemas/ChatFriendRequest"}}
+        outgoingRequests: {type: array, items: {$ref: "#/components/schemas/ChatFriendRequest"}}
+    FriendRequestInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: {type: string, minLength: 1, maxLength: 36}
+    FriendRequestResult:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [pending, incoming, friends]}
+        requestId: {type: string}
+    FriendActionResult:
+      type: object
+      required: [ok, status]
+      properties:
+        ok: {type: boolean}
+        status: {type: string, enum: [accepted, declined]}
     DirectChatInput:
       type: object
       required: [userId]

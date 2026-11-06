@@ -34,6 +34,7 @@ import type {
   AnswerInput,
   AudioUpload,
   ChatActionResult,
+  ChatFriendsResponse,
   ChatImageUpload,
   ChatImageUploadInput,
   ChatMessage,
@@ -47,6 +48,9 @@ import type {
   DeleteProfileResult,
   DirectChatInput,
   ErrorResponse,
+  FriendActionResult,
+  FriendRequestInput,
+  FriendRequestResult,
   GetAdminUsersParams,
   HealthStatus,
   Interview,
@@ -2347,6 +2351,319 @@ export function useGetChatRooms<TData = Awaited<ReturnType<typeof getChatRooms>>
 
 
 
+
+export const getGetChatFriendsUrl = () => {
+
+
+
+
+  return `/api/chat/friends`
+}
+
+export const getChatFriends = async ( options?: Parameters<typeof customFetch>[1]): Promise<ChatFriendsResponse> => {
+
+  return customFetch<ChatFriendsResponse>(getGetChatFriendsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetChatFriendsQueryKey = () => {
+    return [
+    `/api/chat/friends`
+    ] as const;
+    }
+
+
+export const getGetChatFriendsQueryOptions = <TData = Awaited<ReturnType<typeof getChatFriends>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetChatFriendsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChatFriends>>> = ({ signal }) => getChatFriends({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetChatFriendsQueryResult = NonNullable<Awaited<ReturnType<typeof getChatFriends>>>
+export type GetChatFriendsQueryError = ErrorType<unknown>
+
+
+export function useGetChatFriends<TData = Awaited<ReturnType<typeof getChatFriends>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getChatFriends>>,
+          TError,
+          Awaited<ReturnType<typeof getChatFriends>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetChatFriends<TData = Awaited<ReturnType<typeof getChatFriends>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getChatFriends>>,
+          TError,
+          Awaited<ReturnType<typeof getChatFriends>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetChatFriends<TData = Awaited<ReturnType<typeof getChatFriends>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetChatFriends<TData = Awaited<ReturnType<typeof getChatFriends>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatFriends>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetChatFriendsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendFriendRequestUrl = () => {
+
+
+
+
+  return `/api/chat/friend-requests`
+}
+
+export const sendFriendRequest = async (friendRequestInput: FriendRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<FriendRequestResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FriendRequestResult>(getSendFriendRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(friendRequestInput)
+  }
+);}
+
+
+
+
+
+export const getSendFriendRequestMutationKey = () => ['sendFriendRequest'] as const;
+
+export const getSendFriendRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,SendFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,SendFriendRequestMutationVariables, TContext> => {
+
+const mutationKey = getSendFriendRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendFriendRequest>>, SendFriendRequestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendFriendRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof sendFriendRequest>>>
+    export type SendFriendRequestMutationBody = BodyType<FriendRequestInput>
+    export type SendFriendRequestMutationError = ErrorType<unknown>
+    export type SendFriendRequestMutationVariables = {data: BodyType<FriendRequestInput>}
+
+    export const useSendFriendRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,SendFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendFriendRequest>>,
+        TError,
+        SendFriendRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendFriendRequestMutationOptions(options), queryClient);
+    }
+
+export const getAcceptFriendRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/chat/friend-requests/${requestId}/accept`
+}
+
+export const acceptFriendRequest = async (requestId: string, options?: Parameters<typeof customFetch>[1]): Promise<FriendActionResult> => {
+
+  return customFetch<FriendActionResult>(getAcceptFriendRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcceptFriendRequestMutationKey = () => ['acceptFriendRequest'] as const;
+
+export const getAcceptFriendRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,AcceptFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,AcceptFriendRequestMutationVariables, TContext> => {
+
+const mutationKey = getAcceptFriendRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptFriendRequest>>, AcceptFriendRequestMutationVariables> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  acceptFriendRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof acceptFriendRequest>>>
+
+    export type AcceptFriendRequestMutationError = ErrorType<unknown>
+    export type AcceptFriendRequestMutationVariables = {requestId: string}
+
+    export const useAcceptFriendRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,AcceptFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof acceptFriendRequest>>,
+        TError,
+        AcceptFriendRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAcceptFriendRequestMutationOptions(options), queryClient);
+    }
+
+export const getDeclineFriendRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/chat/friend-requests/${requestId}/decline`
+}
+
+export const declineFriendRequest = async (requestId: string, options?: Parameters<typeof customFetch>[1]): Promise<FriendActionResult> => {
+
+  return customFetch<FriendActionResult>(getDeclineFriendRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeclineFriendRequestMutationKey = () => ['declineFriendRequest'] as const;
+
+export const getDeclineFriendRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineFriendRequest>>, TError,DeclineFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof declineFriendRequest>>, TError,DeclineFriendRequestMutationVariables, TContext> => {
+
+const mutationKey = getDeclineFriendRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof declineFriendRequest>>, DeclineFriendRequestMutationVariables> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  declineFriendRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeclineFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof declineFriendRequest>>>
+
+    export type DeclineFriendRequestMutationError = ErrorType<unknown>
+    export type DeclineFriendRequestMutationVariables = {requestId: string}
+
+    export const useDeclineFriendRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineFriendRequest>>, TError,DeclineFriendRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof declineFriendRequest>>,
+        TError,
+        DeclineFriendRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeclineFriendRequestMutationOptions(options), queryClient);
+    }
 
 export const getSearchChatStudentsUrl = (params: SearchChatStudentsParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -323,6 +323,54 @@ export interface ChatStudentsResponse {
   students: ChatStudent[];
 }
 
+export interface ChatFriendRequest {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface ChatFriendsResponse {
+  friends: ChatStudent[];
+  incomingRequests: ChatFriendRequest[];
+  outgoingRequests: ChatFriendRequest[];
+}
+
+export interface FriendRequestInput {
+  /**
+     * @minLength 1
+     * @maxLength 36
+     */
+  userId: string;
+}
+
+export type FriendRequestResultStatus = typeof FriendRequestResultStatus[keyof typeof FriendRequestResultStatus];
+
+
+export const FriendRequestResultStatus = {
+  pending: 'pending',
+  incoming: 'incoming',
+  friends: 'friends',
+} as const;
+
+export interface FriendRequestResult {
+  status: FriendRequestResultStatus;
+  requestId?: string;
+}
+
+export type FriendActionResultStatus = typeof FriendActionResultStatus[keyof typeof FriendActionResultStatus];
+
+
+export const FriendActionResultStatus = {
+  accepted: 'accepted',
+  declined: 'declined',
+} as const;
+
+export interface FriendActionResult {
+  ok: boolean;
+  status: FriendActionResultStatus;
+}
+
 export interface DirectChatInput {
   /**
      * @minLength 1

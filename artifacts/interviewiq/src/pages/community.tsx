@@ -3,15 +3,16 @@ import { Link } from "wouter";
 import { io, type Socket } from "socket.io-client";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import {
-  useCreateDirectChat, useGetChatMessages, useGetChatRooms, useJoinChatRoom,
+  acceptFriendRequest, declineFriendRequest, getGetChatFriendsQueryKey, sendFriendRequest,
+  useCreateDirectChat, useGetChatFriends, useGetChatMessages, useGetChatRooms, useJoinChatRoom,
   useLeaveChatRoom, useSearchChatStudents, useSendChatMessage,
 } from "@workspace/api-client-react";
 import type { ChatMessage, ChatRoom } from "@workspace/api-client-react";
 import { getGetChatMessagesQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, ImagePlus, LoaderCircle, MessageCircle, MessagesSquare, MoreHorizontal,
-  Paperclip, Search, Send, Smile, Users, X,
+  ArrowLeft, Check, ImagePlus, LoaderCircle, MessageCircle, MessagesSquare, MoreHorizontal,
+  Paperclip, Search, Send, Smile, UserPlus, Users, X,
 } from "lucide-react";
 import { useAuth, errMsg } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,11 @@ export default function CommunityPage() {
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const roomsQuery = useGetChatRooms({ query: { enabled: !!user, staleTime: 20_000, queryKey: ["chat-rooms", user?.id] } });
+  const friendsKey = ["chat-friends", user?.id, getGetChatFriendsQueryKey()] as const;
+  const friendsQuery = useGetChatFriends({
+    query: { enabled: !!user, staleTime: 15_000, queryKey: friendsKey },
+  });
+  const friendData = friendsQuery.data;
   const rooms = roomsQuery.data?.rooms ?? [];
   const [tab, setTab] = useState<"channels" | "direct">("channels");
   const [activeRoomId, setActiveRoomId] = useState("");
@@ -57,8 +63,17 @@ export default function CommunityPage() {
   const [studentSearch, setStudentSearch] = useState("");
   const searchParams = useMemo(() => ({ q: studentSearch.trim() }), [studentSearch]);
   const studentsQuery = useSearchChatStudents(searchParams, {
-    query: { enabled: searchOpen && searchParams.q.length >= 2, queryKey: ["chat-students", searchParams], staleTime: 10_000 },
+    query: { enabled: !!user && searchOpen && searchParams.q.length >= 2, queryKey: ["chat-students", user?.id, searchParams], staleTime: 10_000 },
   });
+  const refreshFriendData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: friendsKey }),
+      queryClient.invalidateQueries({ queryKey: ["chat-students", user?.id] }),
+    ]);
+  };
+  const requestFriend = useMutation({ mutationFn: (input: { userId: string }) => sendFriendRequest(input), onSuccess: refreshFriendData });
+  const acceptFriend = useMutation({ mutationFn: (requestId: string) => acceptFriendRequest(requestId), onSuccess: refreshFriendData });
+  const declineFriend = useMutation({ mutationFn: (requestId: string) => declineFriendRequest(requestId), onSuccess: refreshFriendData });
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState("");
@@ -90,21 +105,39 @@ export default function CommunityPage() {
   const messages = messagesQuery.data?.messages ?? [];
   const directRooms = rooms.filter((room) => !room.isPublic);
   const publicRooms = rooms.filter((room) => room.isPublic);
+  const friends = friendData?.friends ?? [];
+  const incomingRequests = friendData?.incomingRequests ?? [];
+  const outgoingRequests = friendData?.outgoingRequests ?? [];
 
   useEffect(() => {
     if (accountIdRef.current === user?.id) return;
+    const previousId = accountIdRef.current;
     accountIdRef.current = user?.id;
+    if (previousId) {
+      queryClient.removeQueries({ queryKey: ["chat-friends", previousId] });
+      queryClient.removeQueries({ queryKey: ["chat-students", previousId] });
+    }
     setActiveRoomId("");
     setMobileChat(false);
     setSearchOpen(false);
     setStudentSearch("");
+    requestFriend.reset();
+    acceptFriend.reset();
+    declineFriend.reset();
     setDraft("");
     setSendError("");
     setPicker(null);
     if (attachmentPreview) URL.revokeObjectURL(attachmentPreview);
     setAttachment(null);
     setAttachmentPreview("");
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
+
+  useEffect(() => () => {
+    if (user?.id) {
+      queryClient.removeQueries({ queryKey: ["chat-friends", user.id] });
+      queryClient.removeQueries({ queryKey: ["chat-students", user.id] });
+    }
+  }, [user?.id, queryClient]);
 
   useEffect(() => {
     activeRoomRef.current = activeRoom?.isMember ? activeRoom.id : "";
@@ -132,6 +165,8 @@ export default function CommunityPage() {
     socketRef.current = socket;
     const onConnect = () => {
       setSocketOnline(true);
+      void queryClient.invalidateQueries({ queryKey: ["chat-friends", user.id] });
+      void queryClient.invalidateQueries({ queryKey: ["chat-students", user.id] });
       if (activeRoomRef.current) {
         socket.emit("chat:join", { roomId: activeRoomRef.current });
         socketRoomRef.current = activeRoomRef.current;
@@ -152,15 +187,21 @@ export default function CommunityPage() {
       });
       void queryClient.invalidateQueries({ queryKey: key });
     };
+    const onFriendUpdate = () => {
+      void queryClient.invalidateQueries({ queryKey: ["chat-friends", user.id] });
+      void queryClient.invalidateQueries({ queryKey: ["chat-students", user.id] });
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("chat:message", onMessage);
+    socket.on("chat:friend-update", onFriendUpdate);
     return () => {
       if (socketRoomRef.current) socket.emit("chat:leave", { roomId: socketRoomRef.current });
       socketRoomRef.current = "";
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("chat:message", onMessage);
+      socket.off("chat:friend-update", onFriendUpdate);
       socket.disconnect();
       if (socketRef.current === socket) socketRef.current = null;
       setSocketOnline(false);
@@ -344,6 +385,43 @@ export default function CommunityPage() {
             <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
               {roomsQuery.isLoading && <div className="space-y-2 p-2">{[0, 1, 2, 3].map((item) => <div key={item} className="h-[68px] animate-pulse rounded-xl bg-muted" />)}</div>}
               {roomsQuery.isError && <div className="m-2 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm"><p className="font-medium">Couldn’t load conversations.</p><button onClick={() => void roomsQuery.refetch()} className="mt-2 text-primary underline underline-offset-4">Try again</button></div>}
+              {tab === "direct" && <div className="mb-4 space-y-4 px-1">
+                {friendsQuery.isLoading && <div className="space-y-2 px-2"><div className="h-3 w-24 animate-pulse rounded bg-muted" /><div className="h-12 animate-pulse rounded-xl bg-muted" /></div>}
+                {friendsQuery.isError && <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs"><p className="font-semibold">Friend list unavailable.</p><button onClick={() => void friendsQuery.refetch()} className="mt-1.5 font-medium text-primary underline underline-offset-4">Retry</button></div>}
+                {!friendsQuery.isLoading && !friendsQuery.isError && <>
+                  {incomingRequests.length > 0 && <section aria-label="Incoming friend requests" className="space-y-1.5">
+                    <div className="flex items-center justify-between px-2"><span className="font-mono text-[9px] uppercase tracking-[.17em] text-muted-foreground">Incoming requests</span><span className="rounded-full bg-accent/30 px-2 py-0.5 font-mono text-[9px]">{incomingRequests.length}</span></div>
+                    {acceptFriend.isSuccess && <p role="status" className="px-2 text-[10px] text-primary">Request accepted. You’re connected.</p>}
+                    {declineFriend.isSuccess && <p role="status" className="px-2 text-[10px] text-muted-foreground">Request declined.</p>}
+                    {incomingRequests.map((request) => {
+                      const accepting = acceptFriend.isPending && acceptFriend.variables === request.id;
+                      const declining = declineFriend.isPending && declineFriend.variables === request.id;
+                      const actionError = (acceptFriend.isError && acceptFriend.variables === request.id && acceptFriend.error)
+                        || (declineFriend.isError && declineFriend.variables === request.id && declineFriend.error);
+                      return <div key={request.id} className="rounded-xl border border-border/80 bg-background/70 p-2.5" data-testid={`friend-request-incoming-${request.id}`}>
+                        <div className="flex items-center gap-2.5"><ChatAvatar name={request.name} compact /><span className="min-w-0 flex-1 truncate text-xs font-semibold">{request.name}</span></div>
+                        <div className="mt-2 flex gap-1.5">
+                          <button onClick={() => acceptFriend.mutate(request.id)} disabled={acceptFriend.isPending || declineFriend.isPending} className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-primary px-2 text-[10px] font-semibold text-primary-foreground disabled:opacity-60" data-testid={`button-accept-request-${request.id}`}>{accepting ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}{accepting ? "Accepting" : "Accept"}</button>
+                          <button onClick={() => declineFriend.mutate(request.id)} disabled={acceptFriend.isPending || declineFriend.isPending} className="min-h-8 rounded-lg border border-border px-2.5 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-60" data-testid={`button-decline-request-${request.id}`}>{declining ? "Declining…" : "Decline"}</button>
+                        </div>
+                        {actionError && <p role="alert" className="mt-1.5 text-[10px] text-destructive">{errMsg(actionError, "Could not update this request.")}</p>}
+                      </div>;
+                    })}
+                  </section>}
+                  {outgoingRequests.length > 0 && <section aria-label="Outgoing friend requests" className="space-y-1.5">
+                    <span className="block px-2 font-mono text-[9px] uppercase tracking-[.17em] text-muted-foreground">Sent requests</span>
+                    {outgoingRequests.map((request) => <div key={request.id} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2" data-testid={`friend-request-outgoing-${request.id}`}>
+                      <ChatAvatar name={request.name} compact /><span className="min-w-0 flex-1 truncate text-xs font-medium">{request.name}</span><span className="shrink-0 text-[10px] text-muted-foreground">Pending</span>
+                    </div>)}
+                  </section>}
+                  <section aria-label="Friends" className="space-y-1.5">
+                    <div className="flex items-center justify-between px-2"><span className="font-mono text-[9px] uppercase tracking-[.17em] text-muted-foreground">Friends</span><span className="font-mono text-[9px] text-muted-foreground">{friends.length}</span></div>
+                    {friends.length === 0 ? <p className="px-2 py-1 text-[11px] leading-5 text-muted-foreground">Accepted connections will gather here. Find someone to practice with.</p> : friends.map((friend) => <div key={friend.id} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-background/75" data-testid={`friend-${friend.id}`}>
+                      <ChatAvatar name={friend.name} compact /><span className="min-w-0 flex-1 truncate text-xs font-semibold">{friend.name}</span><button onClick={() => openDirect(friend.id)} disabled={createDirect.isPending} aria-label={`Message ${friend.name}`} className="rounded-lg p-2 text-primary hover:bg-primary/10 disabled:opacity-50" data-testid={`button-message-friend-${friend.id}`}><MessageCircle className="h-4 w-4" /></button>
+                    </div>)}
+                  </section>
+                </>}
+              </div>}
               {!roomsQuery.isLoading && !roomsQuery.isError && visibleRooms.length === 0 && <div className="m-2 rounded-2xl border border-dashed border-border bg-background/70 px-4 py-8 text-center"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><MessageCircle className="h-4 w-4" /></div><p className="mt-3 text-sm font-semibold">{tab === "channels" ? "No rooms just yet" : "A fresh start"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{tab === "channels" ? "Community rooms will show up here." : "Find a student to start your first conversation."}</p>{tab === "direct" && <button onClick={() => setSearchOpen(true)} className="mt-3 text-xs font-semibold text-primary">Find a student</button>}</div>}
               {visibleRooms.map((room) => {
                 const name = room.otherUser?.name ?? room.name;
@@ -429,7 +507,7 @@ export default function CommunityPage() {
         <DialogContent className="gap-0 overflow-hidden rounded-[1.4rem] p-0 sm:max-w-lg">
           <DialogHeader className="border-b border-border px-6 py-5">
             <DialogTitle className="font-display text-2xl">Find your practice people</DialogTitle>
-            <DialogDescription className="mt-1">Search by name to start a private conversation.</DialogDescription>
+            <DialogDescription className="mt-1">Message any student, or send a request to keep your practice circle close.</DialogDescription>
           </DialogHeader>
           <div className="p-5">
             <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={studentSearch} onChange={(event) => setStudentSearch(event.target.value.slice(0, 80))} placeholder="Type at least 2 characters…" autoFocus className="h-11 rounded-xl pl-10" /></div>
@@ -438,7 +516,29 @@ export default function CommunityPage() {
               {studentsQuery.isFetching && <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="h-4 w-4 animate-spin" /> Finding students</div>}
               {studentsQuery.isError && <div className="py-6 text-center text-sm text-destructive"><p>Search didn’t work this time.</p><button onClick={() => void studentsQuery.refetch()} className="mt-2 underline underline-offset-4">Try again</button></div>}
               {!studentsQuery.isFetching && !studentsQuery.isError && studentSearch.trim().length >= 2 && studentsQuery.data?.students.length === 0 && <p className="px-3 py-7 text-center text-sm text-muted-foreground">No students found. Try a different name.</p>}
-              {studentsQuery.data?.students.map((student) => <button key={student.id} onClick={() => openDirect(student.id)} disabled={createDirect.isPending} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-muted disabled:opacity-60"><ChatAvatar name={student.name} compact /><span className="flex-1 text-sm font-semibold">{student.name}</span><span className="text-xs text-primary">{createDirect.isPending ? "Opening…" : "Message"}</span></button>)}
+              {studentsQuery.data?.students.map((student) => {
+                const isFriend = friends.some((friend) => friend.id === student.id);
+                const isIncoming = incomingRequests.some((request) => request.userId === student.id);
+                const isOutgoing = outgoingRequests.some((request) => request.userId === student.id);
+                const sendingRequest = requestFriend.isPending && requestFriend.variables?.userId === student.id;
+                const requestError = requestFriend.isError && requestFriend.variables?.userId === student.id;
+                const requestSuccess = requestFriend.isSuccess && requestFriend.variables?.userId === student.id;
+                const requestStatus = requestFriend.data?.status;
+                return <div key={student.id} className="rounded-xl p-3 transition-colors hover:bg-muted" data-testid={`search-student-${student.id}`}>
+                  <div className="flex items-center gap-3">
+                    <ChatAvatar name={student.name} compact />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{student.name}</span>
+                    <button onClick={() => openDirect(student.id)} disabled={createDirect.isPending} className="rounded-lg border border-border px-2.5 py-2 text-[10px] font-semibold text-primary hover:bg-background disabled:opacity-60" data-testid={`button-message-student-${student.id}`}>{createDirect.isPending ? "Opening…" : "Message"}</button>
+                    {isFriend ? <span className="flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-2 text-[10px] font-semibold text-primary"><Check className="h-3 w-3" /> Friend</span>
+                      : isIncoming ? <span className="rounded-lg bg-accent/25 px-2.5 py-2 text-[10px] font-medium text-foreground">Request received</span>
+                        : isOutgoing || (requestSuccess && requestStatus === "pending") ? <span role="status" className="rounded-lg bg-muted px-2.5 py-2 text-[10px] font-medium text-muted-foreground">{sendingRequest ? "Sending…" : "Request sent"}</span>
+                          : requestSuccess && requestStatus === "incoming" ? <span role="status" className="rounded-lg bg-accent/25 px-2.5 py-2 text-[10px] font-medium">They requested you</span>
+                            : <button onClick={() => requestFriend.mutate({ userId: student.id })} disabled={sendingRequest} className="flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-2 text-[10px] font-semibold text-primary hover:bg-primary/15 disabled:opacity-60" data-testid={`button-add-friend-${student.id}`}>{sendingRequest ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}{sendingRequest ? "Sending" : "Add friend"}</button>}
+                  </div>
+                  {requestError && <p role="alert" className="mt-2 pl-11 text-[10px] text-destructive">{errMsg(requestFriend.error, "Could not send the friend request.")}</p>}
+                  {requestSuccess && requestStatus === "friends" && <p role="status" className="mt-2 pl-11 text-[10px] text-primary">You’re now friends.</p>}
+                </div>;
+              })}
             </div>
             {createDirect.isError && <p role="alert" className="mt-2 text-xs text-destructive">{errMsg(createDirect.error, "Could not start this conversation.")}</p>}
           </div>

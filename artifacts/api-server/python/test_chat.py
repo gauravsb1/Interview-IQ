@@ -55,6 +55,105 @@ class FakeAuthConnection:
         return False
 
 
+class FakeFriendDatabase:
+    def __init__(self, users):
+        self.users = set(users)
+        self.requests = {}
+
+    def connect(self):
+        return FakeFriendConnection(self)
+
+
+class FakeFriendCursor:
+    def __init__(self, database):
+        self.database = database
+        self.row = None
+        self.rows = []
+        self.rowcount = 0
+
+    def execute(self, query, params=None):
+        statement = " ".join(query.split()).lower()
+        self.row = None
+        self.rows = []
+        self.rowcount = 0
+        if statement.startswith("select id from iq_users where id=%s"):
+            if params[0] in self.database.users:
+                self.row = {"id": params[0]}
+        elif statement.startswith("select id, sender_id, recipient_id, status"):
+            if "where pair_key=%s" in statement:
+                row = self.database.requests.get(params[0])
+                self.row = dict(row) if row else None
+            elif "where id=%s" in statement:
+                self.row = next(
+                    (dict(row) for row in self.database.requests.values()
+                     if row["id"] == params[0]),
+                    None,
+                )
+        elif statement.startswith("insert ignore into friend_requests"):
+            request_id, pair_key, sender_id, recipient_id = params
+            if pair_key not in self.database.requests:
+                self.database.requests[pair_key] = {
+                    "id": request_id,
+                    "sender_id": sender_id,
+                    "recipient_id": recipient_id,
+                    "status": "pending",
+                }
+                self.rowcount = 1
+        elif statement.startswith("update friend_requests set sender_id=%s"):
+            sender_id, recipient_id, request_id = params
+            row = next(
+                (row for row in self.database.requests.values()
+                 if row["id"] == request_id),
+                None,
+            )
+            if row:
+                row.update({
+                    "sender_id": sender_id,
+                    "recipient_id": recipient_id,
+                    "status": "pending",
+                })
+                self.rowcount = 1
+        elif statement.startswith("update friend_requests set status=%s"):
+            status, request_id, recipient_id = params
+            row = next(
+                (row for row in self.database.requests.values()
+                 if row["id"] == request_id),
+                None,
+            )
+            if row and row["recipient_id"] == recipient_id and row["status"] == "pending":
+                row["status"] = status
+                self.rowcount = 1
+
+    def fetchone(self):
+        return dict(self.row) if self.row else None
+
+    def fetchall(self):
+        return list(self.rows)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+class FakeFriendConnection:
+    def __init__(self, database):
+        self.database = database
+
+    def cursor(self):
+        return FakeFriendCursor(self.database)
+
+    def commit(self):
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
 class ChatApiTests(unittest.TestCase):
     def setUp(self):
         self.client = api.app.test_client()
@@ -135,6 +234,72 @@ class ChatApiTests(unittest.TestCase):
         self.assertNotIn("email", response.json["students"][0])
         search.assert_called_once_with(self.user_id, "Candidate")
 
+    def test_friend_list_is_protected_and_contains_request_sections(self):
+        friend_data = {
+            "friends": [{"id": self.other_user_id, "name": "Another Candidate"}],
+            "incomingRequests": [],
+            "outgoingRequests": [],
+        }
+        with self.authenticated_db(), patch.object(
+            chat_storage, "chat_friends_for_user", return_value=friend_data,
+        ) as get_friends:
+            response = self.client.get(
+                "/api/chat/friends",
+                base_url="https://localhost",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, friend_data)
+        self.assertNotIn("email", response.json["friends"][0])
+        get_friends.assert_called_once_with(self.user_id)
+
+    def test_friend_request_notifies_target_and_hides_internal_fields(self):
+        request_id = str(uuid.uuid4())
+        with self.authenticated_db(), patch.object(
+            chat_storage,
+            "send_friend_request",
+            return_value={
+                "status": "pending",
+                "requestId": request_id,
+                "notifyUserId": self.other_user_id,
+            },
+        ), patch.object(api.socketio, "emit") as notify:
+            response = self.client.post(
+                "/api/chat/friend-requests",
+                json={"userId": self.other_user_id},
+                base_url="https://localhost",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json,
+            {"status": "pending", "requestId": request_id},
+        )
+        notify.assert_called_once_with(
+            "chat:friend-update", {}, to=f"chat-user:{self.other_user_id}"
+        )
+
+    def test_accept_endpoint_notifies_both_friend_request_participants(self):
+        request_id = str(uuid.uuid4())
+        with self.authenticated_db(), patch.object(
+            chat_storage,
+            "respond_to_friend_request",
+            return_value={
+                "ok": True,
+                "status": "accepted",
+                "notifyUserIds": [self.other_user_id, self.user_id],
+            },
+        ), patch.object(api.socketio, "emit") as notify:
+            response = self.client.post(
+                f"/api/chat/friend-requests/{request_id}/accept",
+                base_url="https://localhost",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {"ok": True, "status": "accepted"})
+        self.assertEqual(notify.call_count, 2)
+        self.assertEqual(
+            {call.kwargs["to"] for call in notify.call_args_list},
+            {f"chat-user:{self.user_id}", f"chat-user:{self.other_user_id}"},
+        )
+
     def test_rest_message_uses_authenticated_sender_and_broadcasts(self):
         message = {
             "id": str(uuid.uuid4()),
@@ -199,6 +364,23 @@ class ChatApiTests(unittest.TestCase):
     def test_socket_connection_is_rejected_without_jwt(self):
         client = api.socketio.test_client(api.app)
         self.assertFalse(client.is_connected())
+
+    def test_authenticated_socket_receives_user_scoped_friend_updates(self):
+        with self.authenticated_db():
+            client = api.socketio.test_client(
+                api.app,
+                flask_test_client=self.client,
+            )
+            self.assertTrue(client.is_connected())
+            api.socketio.emit(
+                "chat:friend-update",
+                {"updated": True},
+                to=f"chat-user:{self.user_id}",
+            )
+            received = client.get_received()
+            client.disconnect()
+        self.assertEqual(received[0]["name"], "chat:friend-update")
+        self.assertEqual(received[0]["args"][0], {"updated": True})
 
     def test_socket_room_join_rechecks_membership(self):
         with self.authenticated_db(), patch.object(
@@ -265,6 +447,34 @@ class ChatApiTests(unittest.TestCase):
             chat_storage.direct_room_key(self.user_id, self.other_user_id),
             chat_storage.direct_room_key(self.other_user_id, self.user_id),
         )
+
+    def test_friend_request_pair_is_unique_and_reverse_request_is_incoming(self):
+        database = FakeFriendDatabase((self.user_id, self.other_user_id))
+        with patch.object(storage, "connect", side_effect=database.connect):
+            first = chat_storage.send_friend_request(self.user_id, self.other_user_id)
+            repeated = chat_storage.send_friend_request(self.user_id, self.other_user_id)
+            reversed_request = chat_storage.send_friend_request(
+                self.other_user_id, self.user_id
+            )
+        self.assertEqual(first["status"], "pending")
+        self.assertEqual(first["requestId"], repeated["requestId"])
+        self.assertEqual(reversed_request["status"], "incoming")
+        self.assertEqual(reversed_request["requestId"], first["requestId"])
+        self.assertEqual(len(database.requests), 1)
+
+    def test_only_friend_request_recipient_can_accept(self):
+        database = FakeFriendDatabase((self.user_id, self.other_user_id))
+        with patch.object(storage, "connect", side_effect=database.connect):
+            pending = chat_storage.send_friend_request(self.user_id, self.other_user_id)
+            accepted = chat_storage.respond_to_friend_request(
+                self.other_user_id, pending["requestId"], "accepted"
+            )
+            with self.assertRaises(chat_storage.ChatAccessError):
+                chat_storage.respond_to_friend_request(
+                    self.user_id, pending["requestId"], "accepted"
+                )
+        self.assertTrue(accepted["ok"])
+        self.assertEqual(accepted["status"], "accepted")
 
 
 if __name__ == "__main__":

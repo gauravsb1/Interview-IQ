@@ -1042,6 +1042,60 @@ export const GetChatRoomsResponse = zod.object({
 })
 
 
+export const GetChatFriendsResponse = zod.object({
+  "friends": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+})),
+  "incomingRequests": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "name": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "outgoingRequests": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "name": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+export const sendFriendRequestBodyUserIdMax = 36;
+
+
+
+export const SendFriendRequestBody = zod.object({
+  "userId": zod.string().min(1).max(sendFriendRequestBodyUserIdMax)
+})
+
+export const SendFriendRequestResponse = zod.object({
+  "status": zod.enum(['pending', 'incoming', 'friends']),
+  "requestId": zod.string().optional()
+})
+
+
+export const AcceptFriendRequestParams = zod.object({
+  "request_id": zod.coerce.string()
+})
+
+export const AcceptFriendRequestResponse = zod.object({
+  "ok": zod.boolean(),
+  "status": zod.enum(['accepted', 'declined'])
+})
+
+
+export const DeclineFriendRequestParams = zod.object({
+  "request_id": zod.coerce.string()
+})
+
+export const DeclineFriendRequestResponse = zod.object({
+  "ok": zod.boolean(),
+  "status": zod.enum(['accepted', 'declined'])
+})
+
+
 export const searchChatStudentsQueryQMin = 2;
 export const searchChatStudentsQueryQMax = 80;
 

@@ -67,6 +67,155 @@ def search_chat_students(user_id, query):
     return [{"id": row["id"], "name": row["name"]} for row in rows]
 
 
+def chat_friends_for_user(user_id):
+    friends = []
+    incoming = []
+    outgoing = []
+    with storage.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT request.id, request.sender_id, request.recipient_id,
+                       request.status, request.created_at,
+                       sender.name AS sender_name,
+                       recipient.name AS recipient_name
+                FROM friend_requests request
+                JOIN iq_users sender ON sender.id = request.sender_id
+                JOIN iq_users recipient ON recipient.id = request.recipient_id
+                WHERE request.sender_id=%s OR request.recipient_id=%s
+                ORDER BY request.created_at DESC, request.id DESC
+            """, (user_id, user_id))
+            rows = cur.fetchall()
+
+    for row in rows:
+        sender_id = row["sender_id"]
+        recipient_id = row["recipient_id"]
+        status = row["status"]
+        if status == "accepted":
+            friend_id = recipient_id if sender_id == user_id else sender_id
+            friend_name = row["recipient_name"] if sender_id == user_id else row["sender_name"]
+            friends.append({"id": friend_id, "name": friend_name})
+            continue
+        if status != "pending":
+            continue
+        is_incoming = recipient_id == user_id
+        request = {
+            "id": row["id"],
+            "userId": sender_id if is_incoming else recipient_id,
+            "name": row["sender_name"] if is_incoming else row["recipient_name"],
+            "createdAt": storage._iso_datetime(row.get("created_at")),
+        }
+        (incoming if is_incoming else outgoing).append(request)
+
+    friends.sort(key=lambda friend: friend["name"].casefold())
+    return {
+        "friends": friends,
+        "incomingRequests": incoming,
+        "outgoingRequests": outgoing,
+    }
+
+
+def send_friend_request(user_id, other_user_id):
+    if user_id == other_user_id:
+        raise ChatValidationError("You cannot add yourself as a friend.")
+    pair_key = direct_room_key(user_id, other_user_id)
+
+    with storage.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM iq_users WHERE id=%s", (other_user_id,))
+            if not cur.fetchone():
+                return None
+
+            cur.execute("""
+                SELECT id, sender_id, recipient_id, status
+                FROM friend_requests
+                WHERE pair_key=%s
+                FOR UPDATE
+            """, (pair_key,))
+            row = cur.fetchone()
+            if not row:
+                request_id = str(uuid.uuid4())
+                cur.execute("""
+                    INSERT IGNORE INTO friend_requests
+                        (id, pair_key, sender_id, recipient_id, status)
+                    VALUES (%s, %s, %s, %s, 'pending')
+                """, (request_id, pair_key, user_id, other_user_id))
+                cur.execute("""
+                    SELECT id, sender_id, recipient_id, status
+                    FROM friend_requests
+                    WHERE pair_key=%s
+                    FOR UPDATE
+                """, (pair_key,))
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError("Unable to create friend request.")
+
+            if row["status"] == "accepted":
+                result = {"status": "friends", "requestId": row["id"]}
+            elif row["status"] == "pending":
+                result = {
+                    "status": "pending" if row["sender_id"] == user_id else "incoming",
+                    "requestId": row["id"],
+                }
+                if result["status"] == "pending":
+                    result["notifyUserId"] = other_user_id
+            else:
+                cur.execute("""
+                    UPDATE friend_requests
+                    SET sender_id=%s, recipient_id=%s, status='pending',
+                        created_at=CURRENT_TIMESTAMP, responded_at=NULL
+                    WHERE id=%s
+                """, (user_id, other_user_id, row["id"]))
+                result = {
+                    "status": "pending",
+                    "requestId": row["id"],
+                    "notifyUserId": other_user_id,
+                }
+        conn.commit()
+    return result
+
+
+def respond_to_friend_request(user_id, request_id, action):
+    if action not in {"accepted", "declined"}:
+        raise ChatValidationError("Choose accept or decline.")
+    with storage.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, sender_id, recipient_id, status
+                FROM friend_requests
+                WHERE id=%s
+                FOR UPDATE
+            """, (request_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            if row["status"] == action and row["recipient_id"] == user_id:
+                return {
+                    "ok": True,
+                    "status": action,
+                    "notifyUserIds": [],
+                }
+            if row["recipient_id"] != user_id:
+                raise ChatAccessError("Only the recipient can respond to this request.")
+            if row["status"] != "pending":
+                raise ChatValidationError("This friend request is no longer pending.")
+
+            cur.execute("""
+                UPDATE friend_requests
+                SET status=%s, responded_at=CURRENT_TIMESTAMP
+                WHERE id=%s AND status='pending' AND recipient_id=%s
+            """, (action, request_id, user_id))
+            if cur.rowcount != 1:
+                raise ChatValidationError("This friend request has already been handled.")
+            notify_user_ids = [row["sender_id"], row["recipient_id"]]
+        conn.commit()
+    return {
+        "ok": True,
+        "status": action,
+        "notifyUserIds": notify_user_ids,
+    }
+
+
 def create_direct_room(user_id, other_user_id):
     if user_id == other_user_id:
         raise ChatValidationError("You cannot start a chat with yourself.")

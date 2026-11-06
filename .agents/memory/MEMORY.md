@@ -3,3 +3,4 @@
 - [Safe semantic retrieval](semantic-retrieval.md) — keep resume embeddings local, per-user, and rebuildable; don't restore vulnerable ChromaDB.
 - [Owner-only analytics](admin-privacy.md) — candidate records and analytics belong in a separate owner-authenticated dashboard.
 - [OpenAPI parameter naming](openapi-parameter-naming.md) — avoid mixed path and optional query parameters in one Orval operation; generated names can collide.
+- [InterviewIQ friend requests](interviewiq-friends.md) — friendship requires a request and recipient acceptance; adding a friend is not immediate.

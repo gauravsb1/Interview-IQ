@@ -39,6 +39,12 @@ def register_chat_routes(app, socketio, protected, ensure_db, secret):
         ensure_db()
         return jsonify(rooms=chat_storage.chat_rooms_for_user(g.user["id"]))
 
+    @app.get("/api/chat/friends")
+    @protected
+    def get_chat_friends():
+        ensure_db()
+        return jsonify(chat_storage.chat_friends_for_user(g.user["id"]))
+
     @app.get("/api/chat/students")
     @protected
     def search_chat_students():
@@ -47,6 +53,56 @@ def register_chat_routes(app, socketio, protected, ensure_db, secret):
             return jsonify(error="Search with 2 to 80 characters."), 400
         ensure_db()
         return jsonify(students=chat_storage.search_chat_students(g.user["id"], query))
+
+    @app.post("/api/chat/friend-requests")
+    @protected
+    def post_friend_request():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="A valid student userId is required."), 400
+        other_user_id = _uuid_or_none(payload.get("userId"))
+        if not other_user_id:
+            return jsonify(error="A valid student userId is required."), 400
+        ensure_db()
+        try:
+            result = chat_storage.send_friend_request(g.user["id"], other_user_id)
+        except chat_storage.ChatValidationError as exc:
+            return jsonify(error=str(exc)), 400
+        if not result:
+            return jsonify(error="Student not found."), 404
+        notify_user_id = result.pop("notifyUserId", None)
+        if notify_user_id:
+            socketio.emit("chat:friend-update", {}, to=f"chat-user:{notify_user_id}")
+        return jsonify(result), 200
+
+    def respond_to_friend_request(request_id, action):
+        request_id = _uuid_or_none(request_id)
+        if not request_id:
+            return jsonify(error="Friend request not found."), 404
+        ensure_db()
+        try:
+            result = chat_storage.respond_to_friend_request(
+                g.user["id"], request_id, action
+            )
+        except chat_storage.ChatAccessError as exc:
+            return jsonify(error=str(exc)), 403
+        except chat_storage.ChatValidationError as exc:
+            return jsonify(error=str(exc)), 409
+        if not result:
+            return jsonify(error="Friend request not found."), 404
+        for user_id in result.pop("notifyUserIds", []):
+            socketio.emit("chat:friend-update", {}, to=f"chat-user:{user_id}")
+        return jsonify(result), 200
+
+    @app.post("/api/chat/friend-requests/<request_id>/accept")
+    @protected
+    def accept_friend_request(request_id):
+        return respond_to_friend_request(request_id, "accepted")
+
+    @app.post("/api/chat/friend-requests/<request_id>/decline")
+    @protected
+    def decline_friend_request(request_id):
+        return respond_to_friend_request(request_id, "declined")
 
     @app.post("/api/chat/rooms/direct")
     @protected
@@ -216,6 +272,7 @@ def register_chat_routes(app, socketio, protected, ensure_db, secret):
             return False
         with _socket_lock:
             _socket_users[request.sid] = user_id
+        join_room(f"chat-user:{user_id}")
         return True
 
     @socketio.on("disconnect")
