@@ -113,6 +113,7 @@ export interface Interview {
   status: InterviewStatus;
   questionCount: number;
   currentQuestion: string;
+  nextQuestionPending?: boolean;
   answers: Answer[];
   score: number;
   ratings: RatingInput[];

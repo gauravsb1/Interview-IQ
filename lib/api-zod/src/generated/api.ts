@@ -99,6 +99,7 @@ export const GetDashboardResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -146,6 +147,7 @@ export const ListSessionsResponseItem = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -206,6 +208,7 @@ export const CreateSessionResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -256,6 +259,7 @@ export const GetSessionResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -319,6 +323,7 @@ export const SubmitAnswerResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -369,6 +374,58 @@ export const FinishSessionResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
+  "answers": zod.array(zod.object({
+  "question": zod.string(),
+  "text": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "feedback": zod.string(),
+  "improvement": zod.string(),
+  "skill": zod.string(),
+  "speech": zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "duration": zod.number(),
+  "speakingRate": zod.number(),
+  "pauses": zod.number().int(),
+  "silenceDuration": zod.number(),
+  "fillerWords": zod.number().int()
+}).optional()
+})),
+  "score": zod.number(),
+  "ratings": zod.array(zod.object({
+  "answerIndex": zod.number().int(),
+  "rater": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "notes": zod.string().optional()
+}))
+})
+
+
+export const RetryQuestionParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RetryQuestionResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.string(),
+  "role": zod.string(),
+  "company": zod.string(),
+  "createdAt": zod.string(),
+  "status": zod.enum(['active', 'completed']),
+  "questionCount": zod.number().int(),
+  "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),
@@ -446,6 +503,7 @@ export const SaveRatingResponse = zod.object({
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
   "text": zod.string(),

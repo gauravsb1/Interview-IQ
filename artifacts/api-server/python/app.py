@@ -267,9 +267,38 @@ def answer(sid):
                 result["speech"] = speech
         interview["answers"].append(result)
         if len(interview["answers"]) >= interview["questionCount"]:
-            interview.update(status="completed", currentQuestion="")
-        else:
+            interview.update(status="completed", currentQuestion="", nextQuestionPending=False)
+            return persist(interview)
+
+        # Commit the evaluated answer before asking Gemini for another question.
+        # A provider outage must not make the candidate submit (and pay to score)
+        # the same answer again.
+        interview["currentQuestion"] = ""
+        interview["nextQuestionPending"] = True
+        persist(interview)
+        try:
             interview["currentQuestion"] = intelligence.question(g.user["id"], profile(), interview)
+            interview["nextQuestionPending"] = False
+        except Exception as exc:
+            app.logger.warning("Next interview question unavailable: %s", type(exc).__name__)
+            return jsonify(interview)
+        return persist(interview)
+
+
+@app.post("/api/sessions/<sid>/next-question")
+@protected
+@limiter.limit("20 per hour")
+def retry_next_question(sid):
+    with _session_locks[hash(sid) % 64]:
+        interview = owned_session(sid)
+        if interview["status"] != "active" or not interview.get("nextQuestionPending"):
+            return jsonify(error="There is no pending question to retry."), 409
+        try:
+            interview["currentQuestion"] = intelligence.question(g.user["id"], profile(), interview)
+            interview["nextQuestionPending"] = False
+        except Exception as exc:
+            app.logger.warning("Next interview question retry unavailable: %s", type(exc).__name__)
+            return jsonify(error="The answer is saved, but the next question is unavailable. Please retry."), 503
         return persist(interview)
 
 
@@ -278,7 +307,7 @@ def answer(sid):
 def finish(sid):
     with _session_locks[hash(sid) % 64]:
         interview = owned_session(sid)
-        interview.update(status="completed", currentQuestion="")
+        interview.update(status="completed", currentQuestion="", nextQuestionPending=False)
         return persist(interview)
 
 

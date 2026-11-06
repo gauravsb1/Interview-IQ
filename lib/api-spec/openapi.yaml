@@ -152,6 +152,17 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Interview"}
+  /sessions/{id}/next-question:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: retryQuestion
+      responses:
+        "200":
+          description: Interview with its next generated question
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
   /transcribe:
     post:
       operationId: transcribe
@@ -296,6 +307,7 @@ components:
         status: {type: string, enum: [active, completed]}
         questionCount: {type: integer}
         currentQuestion: {type: string}
+        nextQuestionPending: {type: boolean}
         answers: {type: array, items: {$ref: "#/components/schemas/Answer"}}
         score: {type: number}
         ratings: {type: array, items: {$ref: "#/components/schemas/RatingInput"}}

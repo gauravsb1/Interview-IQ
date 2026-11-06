@@ -1144,6 +1144,74 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getFinishSessionMutationOptions(options), queryClient);
     }
 
+export const getRetryQuestionUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/next-question`
+}
+
+export const retryQuestion = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<Interview> => {
+
+  return customFetch<Interview>(getRetryQuestionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryQuestionMutationKey = () => ['retryQuestion'] as const;
+
+export const getRetryQuestionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryQuestion>>, TError,RetryQuestionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryQuestion>>, TError,RetryQuestionMutationVariables, TContext> => {
+
+const mutationKey = getRetryQuestionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryQuestion>>, RetryQuestionMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryQuestion(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryQuestionMutationResult = NonNullable<Awaited<ReturnType<typeof retryQuestion>>>
+
+    export type RetryQuestionMutationError = ErrorType<unknown>
+    export type RetryQuestionMutationVariables = {id: string}
+
+    export const useRetryQuestion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryQuestion>>, TError,RetryQuestionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryQuestion>>,
+        TError,
+        RetryQuestionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRetryQuestionMutationOptions(options), queryClient);
+    }
+
 export const getTranscribeUrl = () => {
 
 

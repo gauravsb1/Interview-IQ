@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useGetSession, getGetSessionQueryKey, useSubmitAnswer, useFinishSession, useTranscribe,
+  useGetSession, getGetSessionQueryKey, useSubmitAnswer, useFinishSession, useTranscribe, useRetryQuestion,
   getListSessionsQueryKey, getGetDashboardQueryKey, type Transcript,
 } from "@workspace/api-client-react";
 import { Volume2, VolumeX, Mic, Square, Loader2, RotateCw, Send, Flag, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -24,6 +24,7 @@ function Room({ id }: { id: string }) {
   const submit = useSubmitAnswer();
   const finish = useFinishSession();
   const transcribe = useTranscribe();
+  const retryQuestion = useRetryQuestion();
   const draft = useAnswerDraft(q.data ? `iq-answer:${id}:${q.data.answers.length}` : undefined);
   const { text, update: setText } = draft;
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -75,7 +76,7 @@ function Room({ id }: { id: string }) {
   if (q.error || !session) return <ErrorState message={errMsg(q.error, "This session could not be loaded.")} onRetry={() => q.refetch()} />;
 
   const doSubmit = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || session.nextQuestionPending) return;
     if (ttsOk) window.speechSynthesis.cancel();
     submit.mutate(
       { id, data: { text: text.trim(), questionIndex: session.answers.length, transcriptId: transcript?.id } },
@@ -93,6 +94,16 @@ function Room({ id }: { id: string }) {
     );
   };
 
+  const doRetryQuestion = () => {
+    retryQuestion.mutate({ id }, {
+      onSuccess: (s) => {
+        qc.setQueryData(getGetSessionQueryKey(id), s);
+        qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      },
+    });
+  };
+
   const doFinish = () => {
     if (submit.isPending || transcribe.isPending || rec.state === "recording" || rec.state === "requesting") return;
     if (text.trim() && !window.confirm("Finish without submitting this draft? Your unsent text will be discarded.")) return;
@@ -108,7 +119,7 @@ function Room({ id }: { id: string }) {
   };
 
   const last = session.answers[session.answers.length - 1];
-  const busy = submit.isPending || transcribe.isPending || finish.isPending;
+  const busy = submit.isPending || transcribe.isPending || finish.isPending || retryQuestion.isPending;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -134,15 +145,28 @@ function Room({ id }: { id: string }) {
           <>
             <div key={question} className="rise relative overflow-hidden rounded-3xl bg-sidebar p-8 text-sidebar-foreground md:p-10">
               <p className="font-mono text-[10px] uppercase tracking-widest text-sidebar-primary">Interviewer</p>
-              <p className="font-display mt-4 text-2xl font-medium leading-snug md:text-[1.9rem]" data-testid="text-current-question">{question}</p>
-              <div className="mt-6 flex items-center gap-3">
-                {ttsOk ? (
-                  <button onClick={speaking ? () => { window.speechSynthesis.cancel(); setSpeaking(false); } : speak} className="inline-flex items-center gap-2 rounded-full border border-sidebar-border px-4 py-2 text-sm hover:bg-sidebar-accent" data-testid="button-speak">
-                    {speaking ? <><VolumeX className="h-4 w-4" /> Stop voice</> : <><Volume2 className="h-4 w-4" /> Read aloud</>}
+              {session.nextQuestionPending ? (
+                <div className="mt-4 rounded-2xl border border-sidebar-border bg-sidebar-accent/50 p-5" role="status" data-testid="status-next-question-pending">
+                  <p className="font-semibold">Your answer and evaluation are saved.</p>
+                  <p className="mt-1 text-sm text-sidebar-foreground/70">The next question could not be prepared just now. Retry when you’re ready; your answer won’t be evaluated twice.</p>
+                  {retryQuestion.error && <p className="mt-3 text-sm text-red-200" data-testid="text-question-retry-error">{errMsg(retryQuestion.error, "The next question is still unavailable.")}</p>}
+                  <button onClick={doRetryQuestion} disabled={retryQuestion.isPending} className="mt-4 inline-flex items-center gap-2 rounded-full bg-sidebar-primary px-5 py-2.5 text-sm font-semibold text-sidebar-primary-foreground disabled:opacity-60" data-testid="button-retry-question">
+                    {retryQuestion.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Preparing question</> : <><RotateCw className="h-4 w-4" /> Retry next question</>}
                   </button>
-                ) : <span className="text-xs text-sidebar-foreground/60">Speech synthesis isn't available in this browser; read the question above.</span>}
-                {speaking && <span className="flex items-end gap-0.5">{[0, 1, 2, 3].map((i) => <span key={i} className="w-1 animate-pulse rounded-full bg-sidebar-primary" style={{ height: 6 + ((i * 5) % 12), animationDelay: `${i * 120}ms` }} />)}</span>}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-display mt-4 text-2xl font-medium leading-snug md:text-[1.9rem]" data-testid="text-current-question">{question}</p>
+                  <div className="mt-6 flex items-center gap-3">
+                    {ttsOk ? (
+                      <button onClick={speaking ? () => { window.speechSynthesis.cancel(); setSpeaking(false); } : speak} className="inline-flex items-center gap-2 rounded-full border border-sidebar-border px-4 py-2 text-sm hover:bg-sidebar-accent" data-testid="button-speak">
+                        {speaking ? <><VolumeX className="h-4 w-4" /> Stop voice</> : <><Volume2 className="h-4 w-4" /> Read aloud</>}
+                      </button>
+                    ) : <span className="text-xs text-sidebar-foreground/60">Speech synthesis isn't available in this browser; read the question above.</span>}
+                    {speaking && <span className="flex items-end gap-0.5">{[0, 1, 2, 3].map((i) => <span key={i} className="w-1 animate-pulse rounded-full bg-sidebar-primary" style={{ height: 6 + ((i * 5) % 12), animationDelay: `${i * 120}ms` }} />)}</span>}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="rise rise-1 rounded-3xl border bg-card p-6">
@@ -151,7 +175,7 @@ function Room({ id }: { id: string }) {
                   {rec.state === "recording" && <span className="pulse-ring absolute inset-0 rounded-full bg-destructive/40" />}
                   <button
                     onClick={rec.state === "recording" ? rec.stop : rec.start}
-                    disabled={rec.state === "unsupported" || rec.state === "requesting" || busy}
+                    disabled={rec.state === "unsupported" || rec.state === "requesting" || busy || session.nextQuestionPending}
                     className={cn("relative flex h-20 w-20 items-center justify-center rounded-full text-primary-foreground transition-transform hover:scale-105 active:scale-95 disabled:opacity-40", rec.state === "recording" ? "bg-destructive" : "bg-primary")}
                     aria-label={rec.state === "recording" ? "Stop recording" : "Start recording"} data-testid="button-record"
                   >
@@ -179,7 +203,7 @@ function Room({ id }: { id: string }) {
                   <label htmlFor="answer" className="text-sm font-medium">Transcript</label>
                   <span className="text-xs text-muted-foreground">Edit freely before submitting</span>
                 </div>
-                <Textarea id="answer" value={text} onChange={(e) => setText(e.target.value)} rows={7} placeholder="Your spoken answer appears here, or type it directly." className="resize-y bg-background text-[15px] leading-relaxed" disabled={submit.isPending} data-testid="input-answer" />
+                <Textarea id="answer" value={text} onChange={(e) => setText(e.target.value)} rows={7} placeholder="Your spoken answer appears here, or type it directly." className="resize-y bg-background text-[15px] leading-relaxed" disabled={submit.isPending || session.nextQuestionPending} data-testid="input-answer" />
                 <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
                   {draft.notice || "Unsent text is saved in this tab until submission. Audio is not saved."}
                 </p>
@@ -193,7 +217,7 @@ function Room({ id }: { id: string }) {
                 )}
                 {submit.error && <p className="mt-3 text-sm text-destructive" data-testid="text-submit-error">{errMsg(submit.error, "Could not submit answer.")} Your text is preserved; try again.</p>}
                 <div className="mt-4 flex justify-end">
-                  <button onClick={doSubmit} disabled={!text.trim() || busy || rec.state === "recording"} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40" data-testid="button-submit-answer">
+                  <button onClick={doSubmit} disabled={!text.trim() || busy || rec.state === "recording" || session.nextQuestionPending} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40" data-testid="button-submit-answer">
                     {submit.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Evaluating answer</> : <><Send className="h-4 w-4" /> Submit answer</>}
                   </button>
                 </div>
