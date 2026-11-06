@@ -12,4 +12,5 @@ export interface RatingInput {
   rater: string;
   scores: Scores;
   notes?: string;
+  blindReviewed: true;
 }

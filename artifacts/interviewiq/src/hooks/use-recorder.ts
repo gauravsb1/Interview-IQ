@@ -4,7 +4,7 @@ export const MAX_SECONDS = 300;
 
 export type RecState = "idle" | "requesting" | "recording" | "denied" | "unsupported" | "error";
 
-export function useRecorder(onBlob: (b: Blob) => void) {
+export function useRecorder(onBlob: (b: Blob) => void, maxSeconds = MAX_SECONDS) {
   const supported = typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
   const [state, setState] = useState<RecState>(supported ? "idle" : "unsupported");
   const [seconds, setSeconds] = useState(0);
@@ -54,7 +54,7 @@ export function useRecorder(onBlob: (b: Blob) => void) {
       setSeconds(0);
       timer.current = window.setInterval(() => setSeconds((x) => {
         const n = x + 1;
-        if (n >= MAX_SECONDS && rec.current && rec.current.state !== "inactive") rec.current.stop();
+        if (n >= maxSeconds && rec.current && rec.current.state !== "inactive") rec.current.stop();
         return n;
       }), 1000);
       setState("recording");
@@ -63,7 +63,7 @@ export function useRecorder(onBlob: (b: Blob) => void) {
       if (!mounted.current) return;
       setState(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : "error");
     }
-  }, [supported, cleanup]);
+  }, [supported, cleanup, maxSeconds]);
 
   const stop = useCallback(() => {
     if (rec.current && rec.current.state !== "inactive") rec.current.stop();

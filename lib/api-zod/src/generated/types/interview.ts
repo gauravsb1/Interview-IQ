@@ -8,7 +8,7 @@
 import type { Answer } from './answer';
 import type { ContextSource } from './contextSource';
 import type { InterviewStatus } from './interviewStatus';
-import type { RatingInput } from './ratingInput';
+import type { Rating } from './rating';
 
 export interface Interview {
   id: string;
@@ -17,12 +17,21 @@ export interface Interview {
   company: string;
   companyContext?: string;
   createdAt: string;
+  startedAt?: Date;
+  deadlineAt?: Date;
   status: InterviewStatus;
   questionCount: number;
+  /**
+     * @minimum 1
+     * @maximum 120
+     */
+  timeLimitMinutes?: number;
+  /** @minimum 1 */
+  recordingLimitMinutes?: number;
   currentQuestion: string;
   currentContext?: ContextSource[];
   nextQuestionPending?: boolean;
   answers: Answer[];
   score: number;
-  ratings: RatingInput[];
+  ratings: Rating[];
 }

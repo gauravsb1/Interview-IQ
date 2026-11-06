@@ -1,12 +1,16 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetProfile, useUploadResume, getGetProfileQueryKey, getGetDashboardQueryKey } from "@workspace/api-client-react";
-import { UploadCloud, Loader2, FileText, Wrench, FolderGit2, GraduationCap, BadgeCheck, Briefcase, ArrowRight } from "lucide-react";
+import { useGetProfile, useUploadResume, useDeleteProfile, getGetProfileQueryKey, getGetDashboardQueryKey } from "@workspace/api-client-react";
+import { UploadCloud, Loader2, FileText, Wrench, FolderGit2, GraduationCap, BadgeCheck, Briefcase, ArrowRight, Trash2 } from "lucide-react";
 import { PageHeader, RequireAuth, ErrorState, PageSkeleton } from "@/components/bits";
 import { errMsg, errStatus } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const ACCEPT = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
 
@@ -75,11 +79,26 @@ const SECTIONS = [
 ] as const;
 
 function ProfileView() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const q = useGetProfile({ query: { retry: false, queryKey: getGetProfileQueryKey() } });
+  const remove = useDeleteProfile();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   if (q.isLoading) return <PageSkeleton />;
   if ((q.error && errStatus(q.error) === 404) || (q.data && !q.data.filename)) return <Uploader />;
   if (q.error || !q.data) return <ErrorState message={errMsg(q.error)} onRetry={() => q.refetch()} />;
   const p = q.data;
+  const deleteResume = () => {
+    remove.mutate(undefined, {
+      onSuccess: () => {
+        setConfirmDelete(false);
+        qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        toast({ title: "Resume deleted", description: "Your saved resume text and extracted profile were removed." });
+      },
+      onError: (error) => toast({ title: "Resume could not be deleted", description: errMsg(error), variant: "destructive" }),
+    });
+  };
   return (
     <div className="space-y-6">
       <div className="rise flex flex-col gap-4 rounded-3xl bg-sidebar p-6 text-sidebar-foreground md:flex-row md:items-center">
@@ -91,6 +110,14 @@ function ProfileView() {
         <Link href="/practice" className="inline-flex w-fit items-center gap-2 rounded-full bg-sidebar-primary px-4 py-2 text-sm font-semibold text-sidebar-primary-foreground" data-testid="link-practice-from-resume">
           Practice with this <ArrowRight className="h-4 w-4" />
         </Link>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-destructive/50 px-4 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10"
+          data-testid="button-delete-resume"
+        >
+          <Trash2 className="h-4 w-4" /> Delete resume
+        </button>
       </div>
       <div className="rise rise-1 rounded-3xl border bg-card p-6">
         <h3 className="mb-4 flex items-center gap-2 font-semibold"><Wrench className="h-4 w-4 text-primary" /> Skills <span className="font-mono text-xs text-muted-foreground">{p.skills.length}</span></h3>
@@ -113,6 +140,27 @@ function ProfileView() {
         ))}
       </div>
       <Uploader compact />
+      <AlertDialog open={confirmDelete} onOpenChange={(open) => !remove.isPending && setConfirmDelete(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Delete your saved resume?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the saved resume text and extracted profile. Past interview answers and results remain; delete sessions separately from History. Finish or delete active interviews before removing this resume.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending} data-testid="button-cancel-delete-resume">Keep resume</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => { event.preventDefault(); deleteResume(); }}
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-resume"
+            >
+              {remove.isPending ? "Deleting" : "Delete resume"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { Link, useParams } from "wouter";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, getGetSessionQueryKey, useSaveRating, getListSessionsQueryKey, type Answer, type Scores } from "@workspace/api-client-react";
-import { ChevronDown, Lightbulb, Mic, UserCheck, Loader2, Info } from "lucide-react";
+import { ChevronDown, Lightbulb, Mic, UserCheck, Loader2, Info, Download } from "lucide-react";
 import { PageHeader, RequireAuth, ErrorState, PageSkeleton, ScoreRing, Bar } from "@/components/bits";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,12 @@ const DIMS: { k: keyof Scores; label: string }[] = [
   { k: "completeness", label: "Completeness" },
   { k: "star", label: "STAR structure" },
 ];
+const RUBRIC_GUIDE: Record<keyof Scores, string> = {
+  technicalAccuracy: "Correctness of the facts, reasoning, or technical approach.",
+  clarity: "How clearly and logically the answer is communicated.",
+  completeness: "Whether the answer addresses the important parts of the question.",
+  star: "Situation, Task, Action, Result structure when that framework applies.",
+};
 const avg = (s: Scores) => (s.technicalAccuracy + s.clarity + s.completeness + s.star) / 4;
 
 function AnswerCard({ a, i, open, toggle }: { a: Answer; i: number; open: boolean; toggle: () => void }) {
@@ -83,6 +89,7 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
   const [idx, setIdx] = useState("0");
   const [rater, setRater] = useState("");
   const [notes, setNotes] = useState("");
+  const [blindReviewed, setBlindReviewed] = useState(false);
   const [scores, setScores] = useState<Record<keyof Scores, string>>({ technicalAccuracy: "", clarity: "", completeness: "", star: "" });
   const [err, setErr] = useState<string | null>(null);
 
@@ -90,19 +97,21 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
     e.preventDefault();
     setErr(null);
     if (!rater.trim()) return setErr("Add the rater's name or role.");
+    if (!blindReviewed) return setErr("Confirm the reviewer rated the answer without seeing the AI scores.");
     const parsed = {} as Scores;
     for (const d of DIMS) {
       const n = Number(scores[d.k]);
       if (scores[d.k] === "" || !Number.isFinite(n) || n < 0 || n > 100) return setErr(`${d.label} must be 0-100.`);
       parsed[d.k] = n;
     }
-    save.mutate({ id, data: { answerIndex: Number(idx), rater: rater.trim(), scores: parsed, notes: notes.trim() || undefined } }, {
+    save.mutate({ id, data: { answerIndex: Number(idx), rater: rater.trim(), scores: parsed, notes: notes.trim() || undefined, blindReviewed } }, {
       onSuccess: (s) => {
         qc.setQueryData(getGetSessionQueryKey(id), s);
         qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
         toast({ title: "Rating saved", description: "Stored as an independent, manually entered rating." });
         setScores({ technicalAccuracy: "", clarity: "", completeness: "", star: "" });
         setNotes("");
+        setBlindReviewed(false);
       },
     });
   };
@@ -116,7 +125,11 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
           <SelectContent>{answers.map((a, i) => <SelectItem key={i} value={String(i)}>Q{i + 1}: {a.question.slice(0, 50)}{a.question.length > 50 ? "..." : ""}</SelectItem>)}</SelectContent>
         </Select>
       </div>
-      <div className="space-y-1.5"><Label htmlFor="rater">Rater</Label><Input id="rater" value={rater} onChange={(e) => setRater(e.target.value)} placeholder="Mentor, peer, career coach" data-testid="input-rater" /></div>
+      <div className="space-y-1.5">
+        <Label htmlFor="rater">Rater label</Label>
+        <Input id="rater" value={rater} onChange={(e) => setRater(e.target.value)} placeholder="Peer A, mentor, career coach" data-testid="input-rater" />
+        <p className="text-xs text-muted-foreground">Use a role or anonymous label, not contact details.</p>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         {DIMS.map((d) => (
           <div key={d.k} className="space-y-1.5">
@@ -126,6 +139,16 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
         ))}
       </div>
       <div className="space-y-1.5"><Label htmlFor="notes">Notes <span className="text-muted-foreground">(optional)</span></Label><Textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-notes" /></div>
+      <label className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={blindReviewed}
+          onChange={(event) => setBlindReviewed(event.target.checked)}
+          className="mt-0.5 accent-primary"
+          data-testid="checkbox-blind-review"
+        />
+        I confirm the reviewer scored this answer without seeing its AI scores.
+      </label>
       {(err || save.error) && <p className="text-sm text-destructive" data-testid="text-rating-error">{err ?? errMsg(save.error, "Could not save rating.")}</p>}
       <button type="submit" disabled={save.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid="button-save-rating">
         {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save human rating
@@ -137,6 +160,7 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
 function View({ id }: { id: string }) {
   const q = useGetSession(id, { query: { enabled: !!id, queryKey: getGetSessionQueryKey(id) } });
   const [open, setOpen] = useState<number | null>(0);
+  const [packetConsent, setPacketConsent] = useState(false);
   if (q.isLoading) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState message={errMsg(q.error, "Results could not be loaded.")} onRetry={() => q.refetch()} />;
   const s = q.data;
@@ -146,6 +170,40 @@ function View({ id }: { id: string }) {
   const dimAvg = DIMS.map((d) => ({ ...d, v: s.answers.length ? s.answers.reduce((t, a) => t + a.scores[d.k], 0) / s.answers.length : 0 }));
   const spoken = s.answers.filter((a) => a.speech).map((a) => a.speech!);
   const sAvg = (f: (t: (typeof spoken)[number]) => number) => spoken.length ? spoken.reduce((t, x) => t + f(x), 0) / spoken.length : 0;
+  const blindRatings = (s.ratings ?? []).filter((rating) => rating.blindReviewed && s.answers[rating.answerIndex]);
+  const agreement = DIMS.map((dimension) => ({
+    ...dimension,
+    meanAbsoluteDifference: blindRatings.length
+      ? blindRatings.reduce((total, rating) => total + Math.abs(rating.scores[dimension.k] - s.answers[rating.answerIndex].scores[dimension.k]), 0) / blindRatings.length
+      : null,
+  }));
+  const downloadBlindPacket = () => {
+    if (!packetConsent) return;
+    const packet = {
+      format: "InterviewIQ blind review",
+      version: 1,
+      role: s.role,
+      category: s.category,
+      instructions: "Rate each answer without requesting or viewing AI-generated scores. Return the filled score fields to the candidate. Avoid adding identifying details.",
+      rubric: DIMS.map((dimension) => ({ dimension: dimension.label, definition: RUBRIC_GUIDE[dimension.k], scale: "0-100" })),
+      answers: s.answers.map((answer, index) => ({
+        item: `Answer ${index + 1}`,
+        question: answer.question,
+        answer: answer.text,
+        scores: Object.fromEntries(DIMS.map((dimension) => [dimension.k, null])),
+        notes: "",
+      })),
+    };
+    const blob = new Blob([JSON.stringify(packet, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "interviewiq-blind-review.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   return (
     <div>
@@ -188,7 +246,32 @@ function View({ id }: { id: string }) {
         <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_380px]">
           <div>
             <h2 className="font-display flex items-center gap-2 text-2xl font-semibold"><UserCheck className="h-5 w-5 text-primary" /> Human-rater comparison</h2>
-            <p className="mt-2 flex gap-2 rounded-xl bg-secondary p-3 text-xs text-muted-foreground"><Info className="h-4 w-4 shrink-0" /> Ratings below are entered manually by you on behalf of an independent person (mentor, peer). They are not verified and are shown only to compare perspectives against the automated evaluation.</p>
+            <p className="mt-2 flex gap-2 rounded-xl bg-secondary p-3 text-xs text-muted-foreground"><Info className="h-4 w-4 shrink-0" /> Ratings are manually entered and reviewer identity is not verified. The comparison is exploratory, not a scientific validation or measure of hiring suitability.</p>
+            <div className="mt-4 rounded-2xl border bg-card p-4" data-testid="blind-review-packet">
+              <h3 className="font-semibold">Prepare a blind review</h3>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">The local download contains questions and answers, but no AI scores, account name, company, or resume. Answer text may still identify you; redact it before sharing. The packet is not uploaded by this app.</p>
+              <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed">
+                <input type="checkbox" checked={packetConsent} onChange={(event) => setPacketConsent(event.target.checked)} className="mt-0.5 accent-primary" data-testid="checkbox-review-packet-consent" />
+                I consent to sharing this packet with a reviewer I choose.
+              </label>
+              <button type="button" onClick={downloadBlindPacket} disabled={!packetConsent} className="mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-download-review-packet">
+                <Download className="h-4 w-4" /> Download blind packet
+              </button>
+            </div>
+            {blindRatings.length > 0 && (
+              <div className="mt-4 rounded-2xl border bg-card p-4" data-testid="summary-rater-agreement">
+                <h3 className="font-semibold">Exploratory score agreement</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Mean absolute score difference across {blindRatings.length} blind-marked rating{blindRatings.length === 1 ? "" : "s"} in this session. Lower means closer scores; small, unverified samples are not a benchmark.</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {agreement.map((dimension) => (
+                    <div key={dimension.k} className="rounded-xl bg-secondary p-3">
+                      <p className="text-xs text-muted-foreground">{dimension.label}</p>
+                      <p className="mt-1 font-mono text-lg font-semibold">{dimension.meanAbsoluteDifference?.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">points</span></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {s.ratings.length ? (
               <div className="mt-4 overflow-x-auto rounded-2xl border bg-card">
                 <table className="w-full text-sm">

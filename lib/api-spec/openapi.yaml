@@ -76,6 +76,19 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Profile"}
+    delete:
+      operationId: deleteProfile
+      responses:
+        "200":
+          description: Stored resume removed
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DeleteProfileResult"}
+        "409":
+          description: Resume deletion is blocked while interview sessions are active
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
   /dashboard:
     get:
       operationId: getDashboard
@@ -242,6 +255,16 @@ components:
         education: {type: array, items: {type: string}}
         certifications: {type: array, items: {type: string}}
         experience: {type: array, items: {type: string}}
+    DeleteProfileResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: {type: boolean}
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
     InterviewInput:
       type: object
       required: [category, role]
@@ -251,6 +274,8 @@ components:
         company: {type: string}
         companyContext: {type: string, maxLength: 8000}
         questionCount: {type: integer, minimum: 3, maximum: 10, default: 5}
+        timeLimitMinutes: {type: integer, minimum: 1, maximum: 120, default: 15}
+        recordingLimitMinutes: {type: integer, minimum: 1, default: 5}
     AnswerInput:
       type: object
       required: [text, questionIndex]
@@ -298,12 +323,22 @@ components:
         contextUsed: {type: array, items: {$ref: "#/components/schemas/ContextSource"}}
     RatingInput:
       type: object
+      required: [answerIndex, rater, scores, blindReviewed]
+      properties:
+        answerIndex: {type: integer}
+        rater: {type: string}
+        scores: {$ref: "#/components/schemas/Scores"}
+        notes: {type: string}
+        blindReviewed: {type: boolean, const: true}
+    Rating:
+      type: object
       required: [answerIndex, rater, scores]
       properties:
         answerIndex: {type: integer}
         rater: {type: string}
         scores: {$ref: "#/components/schemas/Scores"}
         notes: {type: string}
+        blindReviewed: {type: boolean}
     Interview:
       type: object
       required: [id, category, role, company, createdAt, status, questionCount, currentQuestion, answers, score, ratings]
@@ -314,14 +349,18 @@ components:
         company: {type: string}
         companyContext: {type: string}
         createdAt: {type: string}
+        startedAt: {type: string, format: date-time}
+        deadlineAt: {type: string, format: date-time}
         status: {type: string, enum: [active, completed]}
         questionCount: {type: integer}
+        timeLimitMinutes: {type: integer, minimum: 1, maximum: 120}
+        recordingLimitMinutes: {type: integer, minimum: 1}
         currentQuestion: {type: string}
         currentContext: {type: array, items: {$ref: "#/components/schemas/ContextSource"}}
         nextQuestionPending: {type: boolean}
         answers: {type: array, items: {$ref: "#/components/schemas/Answer"}}
         score: {type: number}
-        ratings: {type: array, items: {$ref: "#/components/schemas/RatingInput"}}
+        ratings: {type: array, items: {$ref: "#/components/schemas/Rating"}}
     Trend:
       type: object
       required: [date, score]

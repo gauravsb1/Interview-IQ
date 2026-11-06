@@ -1,4 +1,4 @@
-"""MySQL is authoritative; Chroma indexes are rebuilt from saved resume text."""
+"""MySQL is authoritative; local FastEmbed vectors are derived and not persisted."""
 import json
 import os
 import ssl

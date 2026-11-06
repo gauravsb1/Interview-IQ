@@ -181,10 +181,19 @@ def profile():
 
 @app.route("/api/profile", methods=["GET", "POST"])
 @protected
-@limiter.limit("10 per hour", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST", "DELETE"])
 def resume():
     if request.method == "GET":
         result = profile() or dict(filename="", skills=[], projects=[], education=[], certifications=[], experience=[])
+    elif request.method == "DELETE":
+        active_sessions = [
+            session for session in storage.records(g.user["id"], "session")
+            if session.get("status") == "active"
+        ]
+        if active_sessions:
+            return jsonify(error="Finish or delete active interview sessions before deleting your resume."), 409
+        storage.delete(g.user["id"], "profile", "profile-" + g.user["id"])
+        return jsonify(ok=True)
     else:
         file = request.files.get("file")
         if not file:
@@ -209,6 +218,23 @@ def persist(interview):
     return jsonify(interview)
 
 
+def time_limit_reached(interview):
+    deadline = interview.get("deadlineAt")
+    if not deadline:
+        return False
+    try:
+        deadline_at = datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("This interview has an invalid time limit. Please start a new session.") from exc
+    if deadline_at.tzinfo is None:
+        deadline_at = deadline_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= deadline_at
+
+
+def complete_interview(interview):
+    interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
+
+
 @app.route("/api/sessions", methods=["GET", "POST"])
 @protected
 @limiter.limit("20 per hour", methods=["POST"])
@@ -225,6 +251,16 @@ def sessions():
         raise ValueError("Choose a category and a target role.")
     if not isinstance(count, int) or not 3 <= count <= 10:
         raise ValueError("Choose between 3 and 10 questions.")
+    time_limit_minutes = data.get("timeLimitMinutes", 15)
+    if isinstance(time_limit_minutes, bool) or not isinstance(time_limit_minutes, int) or not 1 <= time_limit_minutes <= 120:
+        raise ValueError("Choose a time limit between 1 and 120 minutes.")
+    recording_limit_minutes = data.get("recordingLimitMinutes", 5)
+    if (
+        isinstance(recording_limit_minutes, bool)
+        or not isinstance(recording_limit_minutes, int)
+        or not 1 <= recording_limit_minutes <= 9_007_199_254_740_991
+    ):
+        raise ValueError("Choose a positive whole-number recording limit.")
     company = str(data.get("company", "")).strip()[:150]
     if category == "company-specific" and not company:
         raise ValueError("Enter the target company.")
@@ -237,8 +273,13 @@ def sessions():
     interview = dict(id=str(uuid.uuid4()), role=role, category=category, company=company,
                      companyContext=company_context,
                      createdAt=datetime.now(timezone.utc).isoformat(), status="active",
-                     questionCount=count, answers=[], ratings=[], score=0, currentQuestion="")
+                     questionCount=count, timeLimitMinutes=time_limit_minutes,
+                     recordingLimitMinutes=recording_limit_minutes,
+                     answers=[], ratings=[], score=0, currentQuestion="")
     question = intelligence.question(g.user["id"], p, interview)
+    started_at = datetime.now(timezone.utc)
+    interview["startedAt"] = started_at.isoformat()
+    interview["deadlineAt"] = (started_at + timedelta(minutes=time_limit_minutes)).isoformat()
     interview["currentQuestion"] = question["question"]
     interview["currentContext"] = question["context"]
     return persist(interview)
@@ -278,8 +319,8 @@ def answer(sid):
             if speech:
                 result["speech"] = speech
         interview["answers"].append(result)
-        if len(interview["answers"]) >= interview["questionCount"]:
-            interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
+        if len(interview["answers"]) >= interview["questionCount"] or time_limit_reached(interview):
+            complete_interview(interview)
             return persist(interview)
 
         # Commit the evaluated answer before asking Gemini for another question.
@@ -289,13 +330,22 @@ def answer(sid):
         interview["currentContext"] = []
         interview["nextQuestionPending"] = True
         persist(interview)
+        if time_limit_reached(interview):
+            complete_interview(interview)
+            return persist(interview)
         try:
             question = intelligence.question(g.user["id"], profile(), interview)
-            interview["currentQuestion"] = question["question"]
-            interview["currentContext"] = question["context"]
-            interview["nextQuestionPending"] = False
+            if time_limit_reached(interview):
+                complete_interview(interview)
+            else:
+                interview["currentQuestion"] = question["question"]
+                interview["currentContext"] = question["context"]
+                interview["nextQuestionPending"] = False
         except Exception as exc:
             app.logger.warning("Next interview question unavailable: %s", type(exc).__name__)
+            if time_limit_reached(interview):
+                complete_interview(interview)
+                return persist(interview)
             return jsonify(interview)
         return persist(interview)
 
@@ -308,13 +358,22 @@ def retry_next_question(sid):
         interview = owned_session(sid)
         if interview["status"] != "active" or not interview.get("nextQuestionPending"):
             return jsonify(error="There is no pending question to retry."), 409
+        if time_limit_reached(interview):
+            complete_interview(interview)
+            return persist(interview)
         try:
             question = intelligence.question(g.user["id"], profile(), interview)
-            interview["currentQuestion"] = question["question"]
-            interview["currentContext"] = question["context"]
-            interview["nextQuestionPending"] = False
+            if time_limit_reached(interview):
+                complete_interview(interview)
+            else:
+                interview["currentQuestion"] = question["question"]
+                interview["currentContext"] = question["context"]
+                interview["nextQuestionPending"] = False
         except Exception as exc:
             app.logger.warning("Next interview question retry unavailable: %s", type(exc).__name__)
+            if time_limit_reached(interview):
+                complete_interview(interview)
+                return persist(interview)
             return jsonify(error="The answer is saved, but the next question is unavailable. Please retry."), 503
         return persist(interview)
 
@@ -324,7 +383,7 @@ def retry_next_question(sid):
 def finish(sid):
     with _session_locks[hash(sid) % 64]:
         interview = owned_session(sid)
-        interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
+        complete_interview(interview)
         return persist(interview)
 
 
@@ -354,12 +413,14 @@ def ratings(sid):
             raise ValueError("Choose a valid answer.")
         if not str(data.get("rater", "")).strip() or len(str(data["rater"])) > 120:
             raise ValueError("Enter the independent rater's label.")
+        if data.get("blindReviewed") is not True:
+            raise ValueError("Confirm the reviewer scored the answer without seeing the AI scores.")
         scores = data.get("scores", {})
         for key in ("technicalAccuracy", "clarity", "completeness", "star"):
             if isinstance(scores.get(key), bool) or not isinstance(scores.get(key), (int, float)) or not 0 <= scores[key] <= 100:
                 raise ValueError("Every rating must be from 0 to 100.")
         rating = dict(answerIndex=index, rater=str(data["rater"]), scores={k: scores[k] for k in ("technicalAccuracy", "clarity", "completeness", "star")},
-                      notes=str(data.get("notes", ""))[:2000])
+                      notes=str(data.get("notes", ""))[:2000], blindReviewed=True)
         interview["ratings"] = [r for r in interview["ratings"] if not (r["answerIndex"] == index and r["rater"] == rating["rater"])] + [rating]
         return persist(interview)
 

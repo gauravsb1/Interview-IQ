@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
 function Room({ id }: { id: string }) {
   const [, setLocation] = useLocation();
@@ -31,7 +32,11 @@ function Room({ id }: { id: string }) {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const timeFinishStarted = useRef(false);
   const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
+  const session = q.data;
+  const recordingLimitSeconds = (session?.recordingLimitMinutes ?? MAX_SECONDS / 60) * 60;
 
   const runTranscribe = (blob: Blob) => {
     setLastBlob(blob);
@@ -39,12 +44,26 @@ function Room({ id }: { id: string }) {
       onSuccess: (t) => { setTranscript(t); setText((prev) => (prev.trim() ? prev.trim() + " " : "") + t.text); },
     });
   };
-  const rec = useRecorder(runTranscribe);
+  const rec = useRecorder(runTranscribe, recordingLimitSeconds);
 
-  const session = q.data;
   const question = session?.currentQuestion ?? "";
   const answered = session?.answers.length ?? 0;
   const allAnswered = !!session && answered >= session.questionCount;
+  const timeExpired = remainingSeconds === 0;
+
+  useEffect(() => {
+    if (!session?.deadlineAt || session.status !== "active") {
+      setRemainingSeconds(null);
+      return;
+    }
+    const update = () => {
+      const deadline = Date.parse(session.deadlineAt!);
+      setRemainingSeconds(Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [session?.deadlineAt, session?.status]);
 
   const speak = () => {
     if (!ttsOk || !question) return;
@@ -105,9 +124,7 @@ function Room({ id }: { id: string }) {
     });
   };
 
-  const doFinish = () => {
-    if (submit.isPending || transcribe.isPending || rec.state === "recording" || rec.state === "requesting") return;
-    if (text.trim() && !window.confirm("Finish without submitting this draft? Your unsent text will be discarded.")) return;
+  const finishSession = () => {
     finish.mutate({ id }, {
       onSuccess: (s) => {
         draft.clear();
@@ -119,6 +136,38 @@ function Room({ id }: { id: string }) {
     });
   };
 
+  const doFinish = () => {
+    if (submit.isPending || transcribe.isPending || rec.state === "recording" || rec.state === "requesting") return;
+    if ((text.trim() || lastBlob) && !window.confirm("Finish without submitting this answer? Your unsent text or audio will be discarded.")) return;
+    finishSession();
+  };
+
+  useEffect(() => {
+    if (!timeExpired || session?.status !== "active") {
+      timeFinishStarted.current = false;
+      return;
+    }
+    if (rec.state === "recording") {
+      rec.stop();
+      return;
+    }
+    if (
+      rec.state === "requesting" ||
+      text.trim() ||
+      lastBlob ||
+      transcribe.isPending ||
+      submit.isPending ||
+      retryQuestion.isPending ||
+      finish.isPending ||
+      timeFinishStarted.current
+    ) return;
+    timeFinishStarted.current = true;
+    finishSession();
+  }, [
+    timeExpired, session?.status, rec.state, rec.stop, text, lastBlob,
+    transcribe.isPending, submit.isPending, retryQuestion.isPending, finish.isPending,
+  ]);
+
   const last = session.answers[session.answers.length - 1];
   const busy = submit.isPending || transcribe.isPending || finish.isPending || retryQuestion.isPending;
 
@@ -128,9 +177,21 @@ function Room({ id }: { id: string }) {
         <div className="rise flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
           <span className="text-primary">{CATEGORY_LABEL[session.category] ?? session.category}</span>
           <span>{session.role}{session.company ? ` · ${session.company}` : ""}</span>
-          <span className="ml-auto" data-testid="text-progress">Question {Math.min(answered + 1, session.questionCount)} of {session.questionCount}</span>
+          <span data-testid="text-progress">Question {Math.min(answered + 1, session.questionCount)} of {session.questionCount}</span>
+          {remainingSeconds !== null && (
+            <span className={cn("ml-auto font-semibold", remainingSeconds <= 60 ? "text-destructive" : "text-primary")} data-testid="text-time-remaining" aria-live="off">
+              {timeExpired ? "Time limit reached" : `${clock(remainingSeconds)} remaining`}
+            </span>
+          )}
         </div>
         <div className="flex gap-1">{Array.from({ length: session.questionCount }).map((_, i) => <span key={i} className={cn("h-1 flex-1 rounded-full transition-colors duration-500", i < answered ? "bg-primary" : i === answered ? "bg-accent" : "bg-muted")} />)}</div>
+
+        {timeExpired && !allAnswered && (
+          <div className="rise rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm" role="status" data-testid="text-time-expired">
+            <p className="font-semibold text-destructive">Your time limit has ended.</p>
+            <p className="mt-1 text-muted-foreground">Submit your current answer to keep it as the final response. No new question will start; if you have no unsent answer, the session will finish automatically.</p>
+          </div>
+        )}
 
         {allAnswered ? (
           <div className="rise rounded-3xl bg-sidebar p-8 text-sidebar-foreground">
@@ -192,7 +253,7 @@ function Room({ id }: { id: string }) {
                   {rec.state === "recording" && <span className="pulse-ring absolute inset-0 rounded-full bg-destructive/40" />}
                   <button
                     onClick={rec.state === "recording" ? rec.stop : rec.start}
-                    disabled={rec.state === "unsupported" || rec.state === "requesting" || busy || session.nextQuestionPending}
+                    disabled={rec.state === "unsupported" || rec.state === "requesting" || busy || session.nextQuestionPending || timeExpired}
                     className={cn("relative flex h-20 w-20 items-center justify-center rounded-full text-primary-foreground transition-transform hover:scale-105 active:scale-95 disabled:opacity-40", rec.state === "recording" ? "bg-destructive" : "bg-primary")}
                     aria-label={rec.state === "recording" ? "Stop recording" : "Start recording"} data-testid="button-record"
                   >
@@ -200,7 +261,7 @@ function Room({ id }: { id: string }) {
                   </button>
                 </div>
                 <p className="text-sm text-muted-foreground" data-testid="status-recorder">
-                  {rec.state === "recording" ? <span className="font-mono text-destructive">Recording {fmt(rec.seconds)} / {fmt(MAX_SECONDS)}. Stops automatically at the limit.</span>
+                  {rec.state === "recording" ? <span className="font-mono text-destructive">Recording {fmt(rec.seconds)} / {fmt(recordingLimitSeconds)}. Stops automatically at your selected limit.</span>
                     : rec.state === "requesting" ? "Waiting for microphone permission"
                     : rec.state === "denied" ? "Microphone access was blocked. Allow it in your browser settings, or type your answer below."
                     : rec.state === "unsupported" ? "Audio recording isn't supported in this browser. Type your answer below."
@@ -268,9 +329,9 @@ function Room({ id }: { id: string }) {
           </ul>
         </div>
         {!allAnswered && <InterviewCamera />}
-        {!allAnswered && answered > 0 && (
+        {!allAnswered && (answered > 0 || timeExpired) && (
           <button onClick={doFinish} disabled={busy || rec.state === "recording" || rec.state === "requesting"} className="w-full rounded-full border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-50" data-testid="button-end-early">
-            {finish.isPending ? "Finishing" : "End session early"}
+            {finish.isPending ? "Finishing" : timeExpired ? "Finish with submitted answers" : "End session early"}
           </button>
         )}
         <Link href="/history" className="block text-center text-xs text-muted-foreground hover:text-foreground">Leave and resume later</Link>

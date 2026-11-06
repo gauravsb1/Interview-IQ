@@ -18,4 +18,11 @@ export interface InterviewInput {
      * @maximum 10
      */
   questionCount?: number;
+  /**
+     * @minimum 1
+     * @maximum 120
+     */
+  timeLimitMinutes?: number;
+  /** @minimum 1 */
+  recordingLimitMinutes?: number;
 }

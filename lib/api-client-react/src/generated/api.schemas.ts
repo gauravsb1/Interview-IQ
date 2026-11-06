@@ -35,6 +35,14 @@ export interface Profile {
   experience: string[];
 }
 
+export interface DeleteProfileResult {
+  ok: boolean;
+}
+
+export interface ErrorResponse {
+  error: string;
+}
+
 export type InterviewInputCategory = typeof InterviewInputCategory[keyof typeof InterviewInputCategory];
 
 
@@ -56,6 +64,13 @@ export interface InterviewInput {
      * @maximum 10
      */
   questionCount?: number;
+  /**
+     * @minimum 1
+     * @maximum 120
+     */
+  timeLimitMinutes?: number;
+  /** @minimum 1 */
+  recordingLimitMinutes?: number;
 }
 
 export interface AnswerInput {
@@ -103,6 +118,15 @@ export interface RatingInput {
   rater: string;
   scores: Scores;
   notes?: string;
+  blindReviewed: true;
+}
+
+export interface Rating {
+  answerIndex: number;
+  rater: string;
+  scores: Scores;
+  notes?: string;
+  blindReviewed?: boolean;
 }
 
 export type InterviewStatus = typeof InterviewStatus[keyof typeof InterviewStatus];
@@ -120,14 +144,23 @@ export interface Interview {
   company: string;
   companyContext?: string;
   createdAt: string;
+  startedAt?: string;
+  deadlineAt?: string;
   status: InterviewStatus;
   questionCount: number;
+  /**
+     * @minimum 1
+     * @maximum 120
+     */
+  timeLimitMinutes?: number;
+  /** @minimum 1 */
+  recordingLimitMinutes?: number;
   currentQuestion: string;
   currentContext?: ContextSource[];
   nextQuestionPending?: boolean;
   answers: Answer[];
   score: number;
-  ratings: RatingInput[];
+  ratings: Rating[];
 }
 
 export interface Trend {

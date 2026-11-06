@@ -76,6 +76,16 @@ export const UploadResumeResponse = zod.object({
 })
 
 
+export const DeleteProfileResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const getDashboardResponseRecentSessionsItemTimeLimitMinutesMax = 120;
+
+
+
+
 export const GetDashboardResponse = zod.object({
   "demo": zod.boolean(),
   "totalSessions": zod.number().int(),
@@ -97,8 +107,12 @@ export const GetDashboardResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(getDashboardResponseRecentSessionsItemTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -143,10 +157,16 @@ export const GetDashboardResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 }))
 })
+
+
+export const listSessionsResponseTimeLimitMinutesMax = 120;
+
+
 
 
 export const ListSessionsResponseItem = zod.object({
@@ -156,8 +176,12 @@ export const ListSessionsResponseItem = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(listSessionsResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -202,7 +226,8 @@ export const ListSessionsResponseItem = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
@@ -214,6 +239,11 @@ export const createSessionBodyQuestionCountDefault = 5;
 export const createSessionBodyQuestionCountMin = 3;
 export const createSessionBodyQuestionCountMax = 10;
 
+export const createSessionBodyTimeLimitMinutesDefault = 15;
+export const createSessionBodyTimeLimitMinutesMax = 120;
+
+export const createSessionBodyRecordingLimitMinutesDefault = 5;
+
 
 
 export const CreateSessionBody = zod.object({
@@ -221,8 +251,15 @@ export const CreateSessionBody = zod.object({
   "role": zod.string(),
   "company": zod.string().optional(),
   "companyContext": zod.string().max(createSessionBodyCompanyContextMax).optional(),
-  "questionCount": zod.number().int().min(createSessionBodyQuestionCountMin).max(createSessionBodyQuestionCountMax).default(createSessionBodyQuestionCountDefault)
+  "questionCount": zod.number().int().min(createSessionBodyQuestionCountMin).max(createSessionBodyQuestionCountMax).default(createSessionBodyQuestionCountDefault),
+  "timeLimitMinutes": zod.number().int().min(1).max(createSessionBodyTimeLimitMinutesMax).default(createSessionBodyTimeLimitMinutesDefault),
+  "recordingLimitMinutes": zod.number().int().min(1).default(createSessionBodyRecordingLimitMinutesDefault)
 })
+
+export const createSessionResponseTimeLimitMinutesMax = 120;
+
+
+
 
 export const CreateSessionResponse = zod.object({
   "id": zod.string(),
@@ -231,8 +268,12 @@ export const CreateSessionResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(createSessionResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -277,7 +318,8 @@ export const CreateSessionResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 
@@ -286,6 +328,11 @@ export const GetSessionParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const getSessionResponseTimeLimitMinutesMax = 120;
+
+
+
+
 export const GetSessionResponse = zod.object({
   "id": zod.string(),
   "category": zod.string(),
@@ -293,8 +340,12 @@ export const GetSessionResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(getSessionResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -339,7 +390,8 @@ export const GetSessionResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 
@@ -361,6 +413,11 @@ export const SubmitAnswerBody = zod.object({
   "transcriptId": zod.string().optional()
 })
 
+export const submitAnswerResponseTimeLimitMinutesMax = 120;
+
+
+
+
 export const SubmitAnswerResponse = zod.object({
   "id": zod.string(),
   "category": zod.string(),
@@ -368,8 +425,12 @@ export const SubmitAnswerResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(submitAnswerResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -414,7 +475,8 @@ export const SubmitAnswerResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 
@@ -423,6 +485,11 @@ export const FinishSessionParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const finishSessionResponseTimeLimitMinutesMax = 120;
+
+
+
+
 export const FinishSessionResponse = zod.object({
   "id": zod.string(),
   "category": zod.string(),
@@ -430,8 +497,12 @@ export const FinishSessionResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(finishSessionResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -476,7 +547,8 @@ export const FinishSessionResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 
@@ -485,6 +557,11 @@ export const RetryQuestionParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const retryQuestionResponseTimeLimitMinutesMax = 120;
+
+
+
+
 export const RetryQuestionResponse = zod.object({
   "id": zod.string(),
   "category": zod.string(),
@@ -492,8 +569,12 @@ export const RetryQuestionResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(retryQuestionResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -538,7 +619,8 @@ export const RetryQuestionResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 
@@ -571,8 +653,14 @@ export const SaveRatingBody = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.literal(true)
 })
+
+export const saveRatingResponseTimeLimitMinutesMax = 120;
+
+
+
 
 export const SaveRatingResponse = zod.object({
   "id": zod.string(),
@@ -581,8 +669,12 @@ export const SaveRatingResponse = zod.object({
   "company": zod.string(),
   "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(saveRatingResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
   "currentQuestion": zod.string(),
   "currentContext": zod.array(zod.object({
   "source": zod.string(),
@@ -627,7 +719,8 @@ export const SaveRatingResponse = zod.object({
   "completeness": zod.number(),
   "star": zod.number()
 }),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional()
 }))
 })
 

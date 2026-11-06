@@ -27,6 +27,8 @@ function Form() {
   const [company, setCompany] = useState("");
   const [companyContext, setCompanyContext] = useState("");
   const [count, setCount] = useState(5);
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState("15");
+  const [recordingLimitMinutes, setRecordingLimitMinutes] = useState("5");
   const [err, setErr] = useState<string | null>(null);
 
   const hasResume = !!profile.data?.filename;
@@ -36,8 +38,12 @@ function Form() {
     if (!hasResume) return setErr("Upload your resume first so questions come from your experience.");
     if (!role.trim()) return setErr("Which role are you preparing for?");
     if (category === "company-specific" && !company.trim()) return setErr("Company-specific practice needs a company name.");
+    const limit = Number(timeLimitMinutes);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 120) return setErr("Choose a time limit from 1 to 120 minutes.");
+    const recordingLimit = Number(recordingLimitMinutes);
+    if (!Number.isSafeInteger(recordingLimit) || recordingLimit < 1) return setErr("Choose a positive whole number of minutes for recording.");
     create.mutate(
-      { data: { category, role: role.trim(), company: company.trim() || undefined, companyContext: companyContext.trim() || undefined, questionCount: count } },
+      { data: { category, role: role.trim(), company: company.trim() || undefined, companyContext: companyContext.trim() || undefined, questionCount: count, timeLimitMinutes: limit, recordingLimitMinutes: recordingLimit } },
       {
         onSuccess: (s) => {
           qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
@@ -110,7 +116,38 @@ function Form() {
           <button type="button" onClick={() => setCount((c) => Math.min(10, c + 1))} disabled={count >= 10} className="flex h-10 w-10 items-center justify-center rounded-full border border-sidebar-border hover:bg-sidebar-accent disabled:opacity-30" aria-label="More" data-testid="button-count-plus"><Plus className="h-4 w-4" /></button>
         </div>
         <div className="mt-4 flex gap-1">{Array.from({ length: 10 }).map((_, i) => <span key={i} className={cn("h-1 flex-1 rounded-full transition-colors", i < count ? "bg-sidebar-primary" : "bg-sidebar-accent")} />)}</div>
-        <p className="mt-4 text-sm text-sidebar-foreground/70">Roughly {count * 2}-{count * 3} minutes. Each answer is evaluated as you go.</p>
+         <p className="mt-4 text-sm text-sidebar-foreground/70">Up to {count} questions or {timeLimitMinutes || 15} minutes, whichever comes first.</p>
+         <div className="mt-5 space-y-1.5">
+           <Label htmlFor="time-limit" className="text-sidebar-foreground">Time limit in minutes</Label>
+           <Input
+             id="time-limit"
+             type="number"
+             min={1}
+             max={120}
+             step={1}
+             inputMode="numeric"
+             value={timeLimitMinutes}
+             onChange={(event) => setTimeLimitMinutes(event.target.value)}
+             className="border-sidebar-border bg-sidebar-accent text-sidebar-foreground"
+             data-testid="input-time-limit"
+           />
+           <p className="text-xs text-sidebar-foreground/60">Set 1–120 minutes. You can finish early; unsent answers stay under your control.</p>
+         </div>
+         <div className="mt-4 space-y-1.5">
+           <Label htmlFor="recording-limit" className="text-sidebar-foreground">Max recording per answer</Label>
+           <Input
+             id="recording-limit"
+             type="number"
+             min={1}
+             step={1}
+             inputMode="numeric"
+             value={recordingLimitMinutes}
+             onChange={(event) => setRecordingLimitMinutes(event.target.value)}
+             className="border-sidebar-border bg-sidebar-accent text-sidebar-foreground"
+             data-testid="input-recording-limit"
+           />
+           <p className="text-xs text-sidebar-foreground/60">Set any whole number from 1 minute up. You can stop recording sooner at any time.</p>
+         </div>
         {(err || create.error) && <p className="mt-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-200" data-testid="text-practice-error">{err ?? errMsg(create.error, "Could not create the session.")}</p>}
         <button type="submit" disabled={profile.isLoading || create.isPending || !hasResume} className="group mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-sidebar-primary py-3 text-sm font-semibold text-sidebar-primary-foreground hover:opacity-90 disabled:opacity-60" data-testid="button-start-session">
           {profile.isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking saved resume</>
