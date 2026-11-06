@@ -2,3 +2,4 @@
 - [Auth privacy boundaries](auth-boundaries.md) — sign-out must discard mounted personal results, not only clear cached requests.
 - [Safe semantic retrieval](semantic-retrieval.md) — keep resume embeddings local, per-user, and rebuildable; don't restore vulnerable ChromaDB.
 - [Owner-only analytics](admin-privacy.md) — candidate records and analytics belong in a separate owner-authenticated dashboard.
+- [OpenAPI parameter naming](openapi-parameter-naming.md) — avoid mixed path and optional query parameters in one Orval operation; generated names can collide.

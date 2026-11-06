@@ -223,6 +223,40 @@ export interface AdminOverview {
   performanceByCategory: AdminOverviewPerformanceByCategoryItem[];
 }
 
+export interface PageviewInput {
+  /**
+     * @minLength 36
+     * @maxLength 36
+     */
+  visitorId: string;
+  /** @maxLength 200 */
+  pagePath: string;
+}
+
+export interface PageviewResult {
+  accepted: boolean;
+}
+
+export interface TrafficDay {
+  date: string;
+  pageViews: number;
+  uniqueVisitors: number;
+}
+
+export interface TrafficPage {
+  pagePath: string;
+  pageViews: number;
+  uniqueVisitors: number;
+}
+
+export interface AdminTraffic {
+  windowDays: number;
+  pageViews: number;
+  uniqueVisitors: number;
+  daily: TrafficDay[];
+  topPages: TrafficPage[];
+}
+
 export interface AdminUserSummary {
   id: string;
   name: string;
@@ -259,6 +293,77 @@ export interface AdminUserDetail {
   transcripts: Transcript[];
 }
 
+export interface ChatParticipant {
+  id: string;
+  name: string;
+}
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  description: string;
+  isPublic: boolean;
+  isMember: boolean;
+  createdAt: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  otherUser?: ChatParticipant;
+}
+
+export interface ChatRoomsResponse {
+  rooms: ChatRoom[];
+}
+
+export interface ChatStudent {
+  id: string;
+  name: string;
+}
+
+export interface ChatStudentsResponse {
+  students: ChatStudent[];
+}
+
+export interface DirectChatInput {
+  /**
+     * @minLength 1
+     * @maxLength 36
+     */
+  userId: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  imageUrl?: string;
+  createdAt: string;
+}
+
+export interface ChatMessagesResponse {
+  messages: ChatMessage[];
+}
+
+export interface ChatMessageInput {
+  /** @maxLength 4000 */
+  text?: string;
+  /** @maxLength 200 */
+  imageUrl?: string;
+}
+
+export interface ChatImageUploadInput {
+  image: Blob | File;
+}
+
+export interface ChatImageUpload {
+  imageUrl: string;
+}
+
+export interface ChatActionResult {
+  ok: boolean;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -277,5 +382,13 @@ limit?: number;
  * @minimum 0
  */
 offset?: number;
+};
+
+export type SearchChatStudentsParams = {
+/**
+ * @minLength 2
+ * @maxLength 80
+ */
+q: string;
 };
 

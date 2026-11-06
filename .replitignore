@@ -4,4 +4,5 @@
 # No need to store the pnpm store twice.
 .local
 /generated-artifacts/
+/artifacts/api-server/python/chat_uploads/
 __pycache__/

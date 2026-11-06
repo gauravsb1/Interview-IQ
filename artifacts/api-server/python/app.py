@@ -1,4 +1,5 @@
 import functools
+import hashlib
 import hmac
 import json
 import logging
@@ -14,15 +15,18 @@ import bcrypt
 import jwt
 from flask import Flask, g, jsonify, request
 from flask_limiter import Limiter
+from flask_socketio import SocketIO
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 import pymysql
 import intelligence
 import storage
+import chat_api
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+socketio = SocketIO(app, async_mode="threading", max_http_buffer_size=64 * 1024)
 logging.basicConfig(level=logging.INFO)
 secret = os.environ["SESSION_SECRET"]
 limiter = Limiter(key_func=lambda: request.remote_addr or "unknown", app=app,
@@ -112,6 +116,23 @@ def admin_protected(fn):
             return jsonify(error="Admin sign-in is required."), 401
         return fn(*args, **kwargs)
     return wrapped
+
+
+chat_api.register_chat_routes(app, socketio, protected, ensure_db, secret)
+
+
+def normalized_page_path(raw_path):
+    if not isinstance(raw_path, str) or len(raw_path) > 200:
+        return None
+    path = raw_path.split("?", 1)[0].split("#", 1)[0]
+    if path == "/admin" or path.startswith("/admin/"):
+        return None
+    if path in {"/", "/login", "/register", "/resume", "/practice", "/history", "/coaching"}:
+        return path
+    match = re.fullmatch(r"/(interview|results)/[^/]{1,120}", path)
+    if match:
+        return f"/{match.group(1)}/:id"
+    return "/not-found"
 
 
 def public_user(user):
@@ -206,6 +227,7 @@ def logout():
             with conn.cursor() as cur:
                 cur.execute("UPDATE iq_users SET token_version=token_version+1 WHERE id=%s", (g.user["id"],))
             conn.commit()
+        chat_api.disconnect_user_sockets(g.user["id"])
     response = jsonify(ok=True)
     response.delete_cookie("iq_session", path="/", secure=True, httponly=True, samesite="Lax")
     return response
@@ -261,6 +283,39 @@ def admin_logout():
 def admin_overview():
     ensure_db()
     return jsonify(storage.admin_overview())
+
+
+@app.post("/api/analytics/pageview")
+@limiter.limit("30 per minute")
+def record_pageview():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="A page-view object is required."), 400
+    visitor_id = data.get("visitorId")
+    page_path = data.get("pagePath")
+    if (not isinstance(visitor_id, str)
+            or not re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}", visitor_id)
+            or not isinstance(page_path, str)):
+        return jsonify(error="A valid anonymous visitor ID and page path are required."), 400
+    normalized_path = normalized_page_path(page_path)
+    if normalized_path is None:
+        return jsonify(accepted=False), 202
+    visitor_hash = hmac.new(
+        secret.encode("utf-8"),
+        visitor_id.lower().encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    ensure_db()
+    storage.record_pageview(visitor_hash, normalized_path)
+    return jsonify(accepted=True), 202
+
+
+@app.get("/api/admin/traffic")
+@admin_protected
+@limiter.limit("60 per minute")
+def admin_traffic():
+    ensure_db()
+    return jsonify(storage.admin_traffic())
 
 
 @app.get("/api/admin/users")

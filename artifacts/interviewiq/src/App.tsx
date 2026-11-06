@@ -14,8 +14,10 @@ import InterviewPage from '@/pages/interview';
 import HistoryPage from '@/pages/history';
 import ResultsPage from '@/pages/results';
 import CoachingPage from '@/pages/coaching';
+import CommunityPage from '@/pages/community';
 import AdminPage from '@/pages/admin';
 import AdminUserPage from '@/pages/admin-user';
+import { TrafficTracker } from '@/components/traffic-tracker';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
@@ -32,6 +34,7 @@ function CandidateRoutes() {
         <Route path="/history" component={HistoryPage} />
         <Route path="/results/:id" component={ResultsPage} />
         <Route path="/coaching" component={CoachingPage} />
+        <Route path="/community" component={CommunityPage} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
@@ -60,6 +63,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <TrafficTracker />
           <Router />
         </WouterRouter>
         <Toaster />

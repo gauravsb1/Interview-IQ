@@ -273,6 +273,34 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AdminOverview"}
+  /admin/traffic:
+    get:
+      operationId: getAdminTraffic
+      responses:
+        "200":
+          description: Anonymous page-view and unique-browser totals for the last 30 days
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminTraffic"}
+  /analytics/pageview:
+    post:
+      operationId: recordPageview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PageviewInput"}
+      responses:
+        "202":
+          description: Anonymous page view accepted
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PageviewResult"}
+        "400":
+          description: Invalid page view data
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
   /admin/users:
     get:
       operationId: getAdminUsers
@@ -302,6 +330,120 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ErrorResponse"}
+  /chat/rooms:
+    get:
+      operationId: getChatRooms
+      responses:
+        "200":
+          description: Public rooms and the authenticated user's direct conversations
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatRoomsResponse"}
+  /chat/students:
+    get:
+      operationId: searchChatStudents
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 2, maxLength: 80}}
+      responses:
+        "200":
+          description: Matching student names, excluding the authenticated user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatStudentsResponse"}
+  /chat/rooms/direct:
+    post:
+      operationId: createDirectChat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DirectChatInput"}
+      responses:
+        "200":
+          description: Existing or newly created one-to-one conversation
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatRoom"}
+        "404":
+          description: Student not found
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+  /chat/rooms/{room_id}/join:
+    parameters:
+      - {name: room_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: joinChatRoom
+      responses:
+        "200":
+          description: Joined public room
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatRoom"}
+  /chat/rooms/{room_id}/leave:
+    parameters:
+      - {name: room_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: leaveChatRoom
+      responses:
+        "200":
+          description: Left public room
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatActionResult"}
+  /chat/rooms/{room_id}/messages:
+    parameters:
+      - {name: room_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getChatMessages
+      responses:
+        "200":
+          description: Latest 100 messages visible to a room member
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatMessagesResponse"}
+    post:
+      operationId: sendChatMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChatMessageInput"}
+      responses:
+        "201":
+          description: Message saved and broadcast to connected room members
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatMessage"}
+  /chat/rooms/{room_id}/images:
+    parameters:
+      - {name: room_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: uploadChatImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {$ref: "#/components/schemas/ChatImageUploadInput"}
+      responses:
+        "201":
+          description: Private image uploaded to a room
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatImageUpload"}
+  /chat/images/{image_id}:
+    parameters:
+      - {name: image_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getChatImage
+      responses:
+        "200":
+          description: Private image, available only to room members
+          content:
+            image/jpeg: {}
+            image/png: {}
+            image/webp: {}
+            image/gif: {}
   /healthz:
     get:
       operationId: healthCheck
@@ -526,6 +668,40 @@ components:
               category: {type: string}
               sessions: {type: integer}
               averageScore: {type: number}
+    PageviewInput:
+      type: object
+      required: [visitorId, pagePath]
+      properties:
+        visitorId: {type: string, minLength: 36, maxLength: 36}
+        pagePath: {type: string, maxLength: 200}
+    PageviewResult:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: {type: boolean}
+    AdminTraffic:
+      type: object
+      required: [windowDays, pageViews, uniqueVisitors, daily, topPages]
+      properties:
+        windowDays: {type: integer}
+        pageViews: {type: integer}
+        uniqueVisitors: {type: integer}
+        daily: {type: array, items: {$ref: "#/components/schemas/TrafficDay"}}
+        topPages: {type: array, items: {$ref: "#/components/schemas/TrafficPage"}}
+    TrafficDay:
+      type: object
+      required: [date, pageViews, uniqueVisitors]
+      properties:
+        date: {type: string, format: date}
+        pageViews: {type: integer}
+        uniqueVisitors: {type: integer}
+    TrafficPage:
+      type: object
+      required: [pagePath, pageViews, uniqueVisitors]
+      properties:
+        pagePath: {type: string}
+        pageViews: {type: integer}
+        uniqueVisitors: {type: integer}
     AdminUserSummary:
       type: object
       required: [id, name, email, createdAt, lastLoginAt, totalSessions, totalAnswers, averageScore]
@@ -564,6 +740,82 @@ components:
         profile: {$ref: "#/components/schemas/AdminProfile"}
         sessions: {type: array, items: {$ref: "#/components/schemas/Interview"}}
         transcripts: {type: array, items: {$ref: "#/components/schemas/Transcript"}}
+    ChatParticipant:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string}
+        name: {type: string}
+    ChatRoom:
+      type: object
+      required: [id, name, description, isPublic, isMember, createdAt]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: string}
+        isPublic: {type: boolean}
+        isMember: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        lastMessage: {type: string}
+        lastMessageAt: {type: string, format: date-time}
+        otherUser: {$ref: "#/components/schemas/ChatParticipant"}
+    ChatRoomsResponse:
+      type: object
+      required: [rooms]
+      properties:
+        rooms: {type: array, items: {$ref: "#/components/schemas/ChatRoom"}}
+    ChatStudent:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string}
+        name: {type: string}
+    ChatStudentsResponse:
+      type: object
+      required: [students]
+      properties:
+        students: {type: array, items: {$ref: "#/components/schemas/ChatStudent"}}
+    DirectChatInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: {type: string, minLength: 1, maxLength: 36}
+    ChatMessage:
+      type: object
+      required: [id, roomId, senderId, senderName, text, createdAt]
+      properties:
+        id: {type: string}
+        roomId: {type: string}
+        senderId: {type: string}
+        senderName: {type: string}
+        text: {type: string}
+        imageUrl: {type: string}
+        createdAt: {type: string, format: date-time}
+    ChatMessagesResponse:
+      type: object
+      required: [messages]
+      properties:
+        messages: {type: array, items: {$ref: "#/components/schemas/ChatMessage"}}
+    ChatMessageInput:
+      type: object
+      properties:
+        text: {type: string, maxLength: 4000}
+        imageUrl: {type: string, maxLength: 200}
+    ChatImageUploadInput:
+      type: object
+      required: [image]
+      properties:
+        image: {type: string, format: binary}
+    ChatImageUpload:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl: {type: string}
+    ChatActionResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: {type: boolean}
     HealthStatus:
       type: object
       properties:

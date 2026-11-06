@@ -854,6 +854,40 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+export const GetAdminTrafficResponse = zod.object({
+  "windowDays": zod.number().int(),
+  "pageViews": zod.number().int(),
+  "uniqueVisitors": zod.number().int(),
+  "daily": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "pageViews": zod.number().int(),
+  "uniqueVisitors": zod.number().int()
+})),
+  "topPages": zod.array(zod.object({
+  "pagePath": zod.string(),
+  "pageViews": zod.number().int(),
+  "uniqueVisitors": zod.number().int()
+}))
+})
+
+
+export const recordPageviewBodyVisitorIdMin = 36;
+export const recordPageviewBodyVisitorIdMax = 36;
+
+export const recordPageviewBodyPagePathMax = 200;
+
+
+
+export const RecordPageviewBody = zod.object({
+  "visitorId": zod.string().min(recordPageviewBodyVisitorIdMin).max(recordPageviewBodyVisitorIdMax),
+  "pagePath": zod.string().max(recordPageviewBodyPagePathMax)
+})
+
+export const RecordPageviewResponse = zod.object({
+  "accepted": zod.boolean()
+})
+
+
 export const getAdminUsersQueryQMax = 120;
 
 export const getAdminUsersQueryLimitDefault = 25;
@@ -988,6 +1022,157 @@ export const GetAdminUserResponse = zod.object({
   "fillerWords": zod.number().int()
 }))
 })
+
+
+export const GetChatRoomsResponse = zod.object({
+  "rooms": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "isPublic": zod.boolean(),
+  "isMember": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastMessage": zod.string().optional(),
+  "lastMessageAt": zod.coerce.date().optional(),
+  "otherUser": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).optional()
+}))
+})
+
+
+export const searchChatStudentsQueryQMin = 2;
+export const searchChatStudentsQueryQMax = 80;
+
+
+
+export const SearchChatStudentsQueryParams = zod.object({
+  "q": zod.coerce.string().min(searchChatStudentsQueryQMin).max(searchChatStudentsQueryQMax)
+})
+
+export const SearchChatStudentsResponse = zod.object({
+  "students": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}))
+})
+
+
+export const createDirectChatBodyUserIdMax = 36;
+
+
+
+export const CreateDirectChatBody = zod.object({
+  "userId": zod.string().min(1).max(createDirectChatBodyUserIdMax)
+})
+
+export const CreateDirectChatResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "isPublic": zod.boolean(),
+  "isMember": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastMessage": zod.string().optional(),
+  "lastMessageAt": zod.coerce.date().optional(),
+  "otherUser": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).optional()
+})
+
+
+export const JoinChatRoomParams = zod.object({
+  "room_id": zod.coerce.string()
+})
+
+export const JoinChatRoomResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "isPublic": zod.boolean(),
+  "isMember": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastMessage": zod.string().optional(),
+  "lastMessageAt": zod.coerce.date().optional(),
+  "otherUser": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).optional()
+})
+
+
+export const LeaveChatRoomParams = zod.object({
+  "room_id": zod.coerce.string()
+})
+
+export const LeaveChatRoomResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const GetChatMessagesParams = zod.object({
+  "room_id": zod.coerce.string()
+})
+
+export const GetChatMessagesResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "roomId": zod.string(),
+  "senderId": zod.string(),
+  "senderName": zod.string(),
+  "text": zod.string(),
+  "imageUrl": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+export const SendChatMessageParams = zod.object({
+  "room_id": zod.coerce.string()
+})
+
+export const sendChatMessageBodyTextMax = 4000;
+
+export const sendChatMessageBodyImageUrlMax = 200;
+
+
+
+export const SendChatMessageBody = zod.object({
+  "text": zod.string().max(sendChatMessageBodyTextMax).optional(),
+  "imageUrl": zod.string().max(sendChatMessageBodyImageUrlMax).optional()
+})
+
+export const SendChatMessageResponse = zod.object({
+  "id": zod.string(),
+  "roomId": zod.string(),
+  "senderId": zod.string(),
+  "senderName": zod.string(),
+  "text": zod.string(),
+  "imageUrl": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UploadChatImageParams = zod.object({
+  "room_id": zod.coerce.string()
+})
+
+export const UploadChatImageBody = zod.object({
+  "image": zod.instanceof(Blob)
+})
+
+export const UploadChatImageResponse = zod.object({
+  "imageUrl": zod.string()
+})
+
+
+export const GetChatImageParams = zod.object({
+  "image_id": zod.coerce.string()
+})
+
+export const GetChatImageResponse = zod.unknown()
 
 
 /**

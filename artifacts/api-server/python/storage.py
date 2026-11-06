@@ -2,7 +2,7 @@
 import json
 import os
 import ssl
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pymysql
 
@@ -34,6 +34,68 @@ def initialize():
                 id VARCHAR(80) PRIMARY KEY, user_id VARCHAR(36) NOT NULL,
                 kind VARCHAR(20) NOT NULL, body JSON NOT NULL,
                 INDEX iq_owner_kind (user_id,kind))""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS iq_traffic_daily (
+                visit_date DATE NOT NULL,
+                visitor_hash CHAR(64) NOT NULL,
+                page_path VARCHAR(120) NOT NULL,
+                page_views INT UNSIGNED NOT NULL DEFAULT 0,
+                PRIMARY KEY (visit_date, visitor_hash, page_path),
+                INDEX iq_traffic_date (visit_date))""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS chat_rooms (
+                id VARCHAR(36) PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description VARCHAR(255) NOT NULL DEFAULT '',
+                is_public TINYINT(1) NOT NULL DEFAULT 1,
+                direct_key VARCHAR(73) NULL UNIQUE,
+                created_by VARCHAR(36) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX chat_rooms_public (is_public, created_at))""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS room_members (
+                room_id VARCHAR(36) NOT NULL,
+                user_id VARCHAR(36) NOT NULL,
+                joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (room_id, user_id),
+                INDEX room_members_user (user_id, room_id),
+                CONSTRAINT room_members_room_fk FOREIGN KEY (room_id)
+                    REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                CONSTRAINT room_members_user_fk FOREIGN KEY (user_id)
+                    REFERENCES iq_users(id) ON DELETE CASCADE)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS messages (
+                id VARCHAR(36) PRIMARY KEY,
+                room_id VARCHAR(36) NOT NULL,
+                sender_id VARCHAR(36) NOT NULL,
+                message_text TEXT NOT NULL,
+                image_url VARCHAR(255) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX messages_room_time (room_id, created_at, id),
+                INDEX messages_sender_time (sender_id, created_at),
+                CONSTRAINT messages_room_fk FOREIGN KEY (room_id)
+                    REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                CONSTRAINT messages_sender_fk FOREIGN KEY (sender_id)
+                    REFERENCES iq_users(id) ON DELETE CASCADE)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS chat_uploads (
+                image_id VARCHAR(36) PRIMARY KEY,
+                room_id VARCHAR(36) NOT NULL,
+                uploader_id VARCHAR(36) NOT NULL,
+                storage_name VARCHAR(80) NOT NULL UNIQUE,
+                content_type VARCHAR(50) NOT NULL,
+                message_id VARCHAR(36) NULL UNIQUE,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX chat_uploads_room (room_id, created_at),
+                CONSTRAINT chat_uploads_room_fk FOREIGN KEY (room_id)
+                    REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                CONSTRAINT chat_uploads_uploader_fk FOREIGN KEY (uploader_id)
+                    REFERENCES iq_users(id) ON DELETE CASCADE,
+                CONSTRAINT chat_uploads_message_fk FOREIGN KEY (message_id)
+                    REFERENCES messages(id) ON DELETE SET NULL)""")
+            cur.executemany("""INSERT INTO chat_rooms
+                (id, name, description, is_public, direct_key, created_by)
+                VALUES (%s, %s, %s, 1, NULL, NULL)
+                ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description)""", [
+                ("00000000-0000-4000-8000-000000000001", "General", "Introductions, questions, and community updates."),
+                ("00000000-0000-4000-8000-000000000002", "Interview Prep", "Practice answers, share tips, and help each other prepare."),
+                ("00000000-0000-4000-8000-000000000003", "Career Support", "Discuss roles, applications, and the job search."),
+            ])
             for column in ("created_at", "last_login_at"):
                 cur.execute("SHOW COLUMNS FROM iq_users LIKE %s", (column,))
                 if not cur.fetchone():
@@ -242,4 +304,74 @@ def admin_user_detail(uid):
         "profile": profile_data,
         "sessions": sessions,
         "transcripts": transcripts,
+    }
+
+
+def record_pageview(visitor_hash, page_path):
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""DELETE FROM iq_traffic_daily
+                WHERE visit_date < UTC_DATE() - INTERVAL 180 DAY LIMIT 1000""")
+            cur.execute("""INSERT INTO iq_traffic_daily
+                (visit_date, visitor_hash, page_path, page_views)
+                VALUES (UTC_DATE(), %s, %s, 1)
+                ON DUPLICATE KEY UPDATE page_views = page_views + 1""",
+                (visitor_hash, page_path))
+        conn.commit()
+
+
+def admin_traffic():
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT COALESCE(SUM(page_views), 0) AS page_views,
+                                   COUNT(DISTINCT visitor_hash) AS unique_visitors
+                FROM iq_traffic_daily
+                WHERE visit_date >= UTC_DATE() - INTERVAL 29 DAY""")
+            totals = cur.fetchone()
+            cur.execute("""SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS date,
+                                   SUM(page_views) AS page_views,
+                                   COUNT(DISTINCT visitor_hash) AS unique_visitors
+                FROM iq_traffic_daily
+                WHERE visit_date >= UTC_DATE() - INTERVAL 29 DAY
+                GROUP BY visit_date ORDER BY visit_date ASC""")
+            daily_rows = cur.fetchall()
+            cur.execute("""SELECT page_path, SUM(page_views) AS page_views,
+                                   COUNT(DISTINCT visitor_hash) AS unique_visitors
+                FROM iq_traffic_daily
+                WHERE visit_date >= UTC_DATE() - INTERVAL 29 DAY
+                GROUP BY page_path
+                ORDER BY page_views DESC, unique_visitors DESC, page_path ASC
+                LIMIT 8""")
+            top_pages = cur.fetchall()
+
+    daily_by_date = {
+        row["date"]: {
+            "date": row["date"],
+            "pageViews": int(row.get("page_views") or 0),
+            "uniqueVisitors": int(row.get("unique_visitors") or 0),
+        }
+        for row in daily_rows
+    }
+    today = datetime.now(timezone.utc).date()
+    daily = [
+        daily_by_date.get((today - timedelta(days=days_ago)).isoformat(), {
+            "date": (today - timedelta(days=days_ago)).isoformat(),
+            "pageViews": 0,
+            "uniqueVisitors": 0,
+        })
+        for days_ago in range(29, -1, -1)
+    ]
+    return {
+        "windowDays": 30,
+        "pageViews": int(totals.get("page_views") or 0),
+        "uniqueVisitors": int(totals.get("unique_visitors") or 0),
+        "daily": daily,
+        "topPages": [
+            {
+                "pagePath": row["page_path"],
+                "pageViews": int(row.get("page_views") or 0),
+                "uniqueVisitors": int(row.get("unique_visitors") or 0),
+            }
+            for row in top_pages
+        ],
     }

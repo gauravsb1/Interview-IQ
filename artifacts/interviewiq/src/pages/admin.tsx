@@ -5,11 +5,13 @@ import { CSVLink } from "@/components/admin-csv";
 import {
   getGetAdminOverviewQueryKey,
   getGetAdminSessionQueryKey,
+  getGetAdminTrafficQueryKey,
   getGetAdminUsersQueryKey,
   useAdminLogin,
   useAdminLogout,
   useGetAdminOverview,
   useGetAdminSession,
+  useGetAdminTraffic,
   useGetAdminUsers,
   type AdminLoginInput,
   type GetAdminUsersParams,
@@ -21,7 +23,7 @@ import {
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check,
   ChevronDown, Download, LockKeyhole, LogOut, Moon, Printer, RefreshCw,
-  Search, ShieldCheck, Sun, UsersRound,
+  Search, ShieldCheck, Sun, UsersRound, Eye, Globe2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import "@/admin.css";
@@ -149,10 +151,15 @@ export default function AdminPage() {
   const usersQuery = useGetAdminUsers(params, {
     query: { enabled: authenticated, queryKey: getGetAdminUsersQueryKey(params) },
   });
+  const trafficQuery = useGetAdminTraffic({
+    query: { enabled: authenticated, queryKey: getGetAdminTrafficQueryKey() },
+  });
   const logoutMutation = useAdminLogout();
   const loading = overviewQuery.isLoading || overviewQuery.isFetching || usersQuery.isLoading || usersQuery.isFetching;
+  const trafficLoading = trafficQuery.isLoading || trafficQuery.isFetching;
   const overview = overviewQuery.data;
   const usersPage = usersQuery.data;
+  const traffic = trafficQuery.data;
   const updatedAt = formatUpdated(overviewQuery.dataUpdatedAt);
 
   useEffect(() => {
@@ -176,6 +183,7 @@ export default function AdminPage() {
     const timer = window.setInterval(() => {
       queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetAdminTrafficQueryKey() });
     }, Math.max(intervalMs, 5 * 60 * 1000));
     return () => window.clearInterval(timer);
   }, [autoRefresh, authenticated, intervalMs, queryClient]);
@@ -188,6 +196,7 @@ export default function AdminPage() {
     setSpinning(true);
     queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetAdminTrafficQueryKey() });
   };
   const retry = () => {
     session.refetch();
@@ -195,6 +204,13 @@ export default function AdminPage() {
   };
   const chartData = overview?.sessionsByMonth ?? [];
   const categoryData = overview?.performanceByCategory ?? [];
+  const trafficDays = traffic?.daily ?? [];
+  const topPages = traffic?.topPages ?? [];
+  const trafficCsvData: Array<Record<string, string | number>> = trafficDays.map((day) => ({
+    date: day.date,
+    pageViews: day.pageViews,
+    uniqueVisitors: day.uniqueVisitors,
+  }));
   const fullPageCount = usersPage ? Math.max(1, Math.ceil(usersPage.total / limit)) : 1;
   const currentPage = Math.floor(offset / limit) + 1;
 
@@ -229,11 +245,19 @@ export default function AdminPage() {
             </div>
             <button data-testid="button-print-admin" onClick={() => window.print()} className="admin-control grid h-10 w-10 place-items-center" aria-label="Print dashboard"><Printer size={16} /></button>
             <button data-testid="button-toggle-admin-theme" onClick={() => setIsDark((value) => !value)} className="admin-control grid h-10 w-10 place-items-center" aria-label="Toggle dark mode">{isDark ? <Sun size={16} /> : <Moon size={16} />}</button>
-            <button data-testid="button-admin-logout" onClick={() => logoutMutation.mutate(undefined, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetAdminSessionQueryKey() }) })} disabled={logoutMutation.isPending} className="admin-control flex h-10 items-center gap-2 px-3 text-sm"><LogOut size={15} /> Sign out</button>
+            <button data-testid="button-admin-logout" onClick={() => logoutMutation.mutate(undefined, { onSuccess: () => {
+              queryClient.setQueryData(getGetAdminSessionQueryKey(), { authenticated: false });
+              queryClient.removeQueries({
+                predicate: (query) => {
+                  const key = query.queryKey[0];
+                  return typeof key === "string" && key.startsWith("/api/admin/") && key !== "/api/admin/session";
+                },
+              });
+            } })} disabled={logoutMutation.isPending} className="admin-control flex h-10 items-center gap-2 px-3 text-sm"><LogOut size={15} /> Sign out</button>
           </div>
         </header>
 
-        {(overviewQuery.isError || usersQuery.isError) && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e4b3a4] bg-[#fff0eb] px-4 py-3 text-sm text-[#963f2c]"><span>{getErrorMessage(overviewQuery.error ?? usersQuery.error)}</span><button data-testid="button-retry-admin-data" onClick={retry} className="rounded-md border border-[#d9a08f] px-3 py-1.5 font-semibold">Retry</button></div>}
+        {(overviewQuery.isError || usersQuery.isError || trafficQuery.isError) && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e4b3a4] bg-[#fff0eb] px-4 py-3 text-sm text-[#963f2c]"><span>{getErrorMessage(overviewQuery.error ?? usersQuery.error ?? trafficQuery.error)}</span><button data-testid="button-retry-admin-data" onClick={retry} className="rounded-md border border-[#d9a08f] px-3 py-1.5 font-semibold">Retry</button></div>}
 
         <section className="admin-enter-delay mb-7 grid grid-cols-2 gap-3 lg:grid-cols-5">
           {[
@@ -246,6 +270,56 @@ export default function AdminPage() {
             <div className="flex items-center justify-between"><span className="admin-muted text-[12px]">{metric.label}</span><metric.icon size={16} style={{ color: metric.color }} /></div>
             {loading ? <><Skeleton className="mt-4 h-8 w-24" /><Skeleton className="mt-2 h-3 w-32" /></> : <><p className="mt-3 font-mono text-[27px] font-medium tracking-tight">{metric.value === undefined ? "—" : typeof metric.value === "number" ? formatNumber(metric.value) : metric.value}</p><p className="admin-muted mt-1 text-xs">{metric.note}</p></>}
           </article>)}
+        </section>
+
+        <section className="admin-card mb-7 overflow-hidden" aria-labelledby="traffic-heading">
+          <div className="flex flex-col gap-5 border-b border-[var(--admin-line)] p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
+            <div>
+              <p className="admin-kicker mb-1">Anonymous site traffic · last {traffic?.windowDays ?? 30} days</p>
+              <h2 id="traffic-heading" className="text-lg font-semibold">A view of the wider audience</h2>
+              <p className="admin-muted mt-1 max-w-2xl text-sm leading-5">Traffic counts are separate from candidate accounts. Unique visitors represent anonymous browsers, not exact people; no traffic identities are shown here.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:min-w-[300px]">
+              <div className="rounded-xl border border-[var(--admin-line)] bg-[var(--admin-paper)] px-3 py-3">
+                <div className="admin-muted flex items-center gap-2 text-xs"><Eye size={14} /> Page views</div>
+                {trafficLoading ? <Skeleton className="mt-2 h-7 w-20" /> : <p data-testid="metric-traffic-page-views" className="mt-2 font-mono text-xl">{traffic ? formatNumber(traffic.pageViews) : "—"}</p>}
+              </div>
+              <div className="rounded-xl border border-[var(--admin-line)] bg-[var(--admin-paper)] px-3 py-3">
+                <div className="admin-muted flex items-center gap-2 text-xs"><Globe2 size={14} /> Anonymous browsers</div>
+                {trafficLoading ? <Skeleton className="mt-2 h-7 w-20" /> : <p data-testid="metric-traffic-unique-browsers" className="mt-2 font-mono text-xl">{traffic ? formatNumber(traffic.uniqueVisitors) : "—"}</p>}
+              </div>
+            </div>
+          </div>
+          <div className="grid min-w-0 lg:grid-cols-[1.45fr_1fr]">
+            <article className="min-w-0 p-4 sm:p-5 lg:border-r lg:border-[var(--admin-line)]">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div><p className="admin-kicker mb-1">Daily pattern</p><h3 className="text-base font-semibold">Page views & anonymous browsers</h3></div>
+                {!trafficLoading && trafficDays.length > 0 && <CSVLink data={trafficCsvData} filename="site-traffic-last-30-days.csv" className="admin-control grid h-9 w-9 place-items-center admin-print-hide" aria-label="Export daily site traffic chart as CSV"><Download size={15} /></CSVLink>}
+              </div>
+              {trafficLoading ? <Skeleton className="h-[270px] w-full" /> : trafficQuery.isError ? <div className="admin-muted flex h-[270px] items-center justify-center text-center text-sm">Traffic data could not be loaded. Use Retry above.</div> : trafficDays.length ? <ResponsiveContainer width="100%" height={270} debounce={0}>
+                <AreaChart data={trafficDays} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+                  <defs><linearGradient id="trafficViewsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={chartColors.teal} stopOpacity={.26} /><stop offset="100%" stopColor={chartColors.teal} stopOpacity={.02} /></linearGradient><linearGradient id="trafficBrowsersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={chartColors.gold} stopOpacity={.22} /><stop offset="100%" stopColor={chartColors.gold} stopOpacity={0} /></linearGradient></defs>
+                  <CartesianGrid vertical={false} stroke="var(--admin-line)" strokeDasharray="3 5" />
+                  <XAxis dataKey="date" tickFormatter={(value: string) => { const [year, month, day] = value.split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(year, month - 1, day)); }} tick={{ fontSize: 11, fill: "var(--admin-muted)" }} axisLine={false} tickLine={false} minTickGap={24} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--admin-muted)" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={chartTipStyle} cursor={{ stroke: chartColors.teal, strokeDasharray: "3 3" }} labelFormatter={(value) => { const [year, month, day] = String(value).split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(year, month - 1, day)); }} />
+                  <Area type="monotone" dataKey="pageViews" name="Page views" stroke={chartColors.teal} strokeWidth={2.5} fill="url(#trafficViewsFill)" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="uniqueVisitors" name="Anonymous browsers" stroke={chartColors.gold} strokeWidth={2} fill="url(#trafficBrowsersFill)" isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer> : <div className="admin-muted flex h-[270px] flex-col items-center justify-center text-center"><Globe2 size={22} className="mb-3 opacity-50" /><p className="text-sm font-medium">No traffic to chart yet</p><p className="mt-1 text-xs">Daily counts will appear as anonymous browsers visit the site.</p></div>}
+              <div className="admin-muted mt-1 flex flex-wrap gap-x-5 gap-y-2 text-xs"><span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#176a62]" />Page views</span><span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#dba94b]" />Anonymous browsers</span></div>
+            </article>
+            <article className="min-w-0 p-4 sm:p-5">
+              <div className="mb-3"><p className="admin-kicker mb-1">Most visited</p><h3 className="text-base font-semibold">Top pages</h3><p className="admin-muted mt-1 text-xs">By page views in this reporting window</p></div>
+              {trafficLoading ? <div className="space-y-3">{[1,2,3,4].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div> : trafficQuery.isError ? <div className="admin-muted flex min-h-[220px] items-center justify-center text-center text-sm">Page totals could not be loaded. Use Retry above.</div> : topPages.length ? <div className="space-y-1">
+                {topPages.map((page, index) => <div key={page.pagePath} data-testid={`traffic-page-${index}`} className="flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-[var(--admin-paper)]">
+                  <span className="admin-muted w-6 shrink-0 font-mono text-xs">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="min-w-0 flex-1"><p className="truncate font-mono text-sm" title={page.pagePath}>{page.pagePath}</p><p className="admin-muted mt-1 text-xs">{formatNumber(page.uniqueVisitors)} anonymous browsers</p></div>
+                  <span className="shrink-0 text-right"><span className="block font-mono text-sm">{formatNumber(page.pageViews)}</span><span className="admin-muted text-[10px] uppercase tracking-wider">views</span></span>
+                </div>)}
+              </div> : <div className="admin-muted flex min-h-[220px] flex-col items-center justify-center text-center"><Activity size={22} className="mb-3 opacity-50" /><p className="text-sm font-medium">No page totals yet</p><p className="mt-1 text-xs">Popular pages appear once traffic is recorded.</p></div>}
+            </article>
+          </div>
         </section>
 
         <section className="mb-7 grid gap-4 lg:grid-cols-[1.55fr_1fr]">

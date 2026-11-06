@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLogout, useHealthCheck } from "@workspace/api-client-react";
-import { LayoutDashboard, FileText, Mic, History, Wind, LogOut, Menu, X, LogIn } from "lucide-react";
+import { LayoutDashboard, FileText, Mic, History, Wind, LogOut, Menu, X, LogIn, MessagesSquare } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/practice", label: "Practice", icon: Mic },
   { href: "/history", label: "History", icon: History },
   { href: "/coaching", label: "Coaching", icon: Wind },
+  { href: "/community", label: "Community & Messages", icon: MessagesSquare },
 ];
 
 function Brand() {
