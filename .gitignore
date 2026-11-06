@@ -43,6 +43,13 @@ yarn-error.log
 testem.log
 /typings
 
+# Local environment and workspace-specific settings
+.env
+.env.*
+!.env.example
+.replit
+replit.md
+
 # System Files
 .DS_Store
 Thumbs.db
