@@ -1,17 +1,21 @@
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { useGetDashboard } from "@workspace/api-client-react";
+import { useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowUpRight, Mic, FileText, TrendingUp, TrendingDown, Eye } from "lucide-react";
 import { PageHeader, ScoreRing, Bar, ErrorState, EmptyState, PageSkeleton } from "@/components/bits";
 import { useAuth, errMsg, CATEGORY_LABEL } from "@/lib/auth";
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const q = useGetDashboard();
-  if (q.isLoading) return <PageSkeleton />;
+  const { user, isLoading } = useAuth();
+  const q = useGetDashboard({ query: {
+    queryKey: [...getGetDashboardQueryKey(), user?.id ?? "public"],
+    enabled: !isLoading,
+  } });
+  if (isLoading || q.isLoading) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState message={errMsg(q.error)} onRetry={() => q.refetch()} />;
   const d = q.data;
+  if (!user && !d.demo) return <PageSkeleton />;
   const up = d.improvement >= 0;
 
   return (

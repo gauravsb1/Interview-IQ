@@ -27,7 +27,7 @@ function Brand() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -39,10 +39,17 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const doLogout = () =>
     logout.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: async () => {
+        await qc.cancelQueries();
         qc.clear();
-        setLocation("/");
-        toast({ title: "Signed out", description: "See you at the next rehearsal." });
+        // A fresh document discards mounted query observers and private UI state.
+        try {
+          for (const key of Object.keys(sessionStorage)) {
+            if (key.startsWith("iq-answer:")) sessionStorage.removeItem(key);
+          }
+        } finally {
+          window.location.replace(import.meta.env.BASE_URL);
+        }
       },
       onError: () => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }),
     });

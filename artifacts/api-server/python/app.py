@@ -31,6 +31,16 @@ _schema_lock = threading.Lock()
 _session_locks = [threading.Lock() for _ in range(64)]
 
 
+@app.after_request
+def private_response(response):
+    # The same endpoint can return public examples or private candidate results.
+    # Neither browser caches nor intermediary caches may reuse these responses.
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
+    response.vary.add("Cookie")
+    return response
+
+
 def ensure_db():
     global _schema_ready
     if not _schema_ready:

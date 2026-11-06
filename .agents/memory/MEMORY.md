@@ -1,1 +1,2 @@
 - [External MySQL TLS](interviewiq.md) — server presents a self-signed chain; require the provider CA, never disable verification.
+- [Auth privacy boundaries](auth-boundaries.md) — sign-out must discard mounted personal results, not only clear cached requests.

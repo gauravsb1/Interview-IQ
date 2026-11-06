@@ -9,6 +9,7 @@ import { Volume2, VolumeX, Mic, Square, Loader2, RotateCw, Send, Flag, CheckCirc
 import { RequireAuth, ErrorState, PageSkeleton, ScoreRing } from "@/components/bits";
 import { Textarea } from "@/components/ui/textarea";
 import { useRecorder, MAX_SECONDS } from "@/hooks/use-recorder";
+import { useAnswerDraft } from "@/hooks/use-answer-draft";
 import { errMsg, CATEGORY_LABEL } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,8 @@ function Room({ id }: { id: string }) {
   const submit = useSubmitAnswer();
   const finish = useFinishSession();
   const transcribe = useTranscribe();
-  const [text, setText] = useState("");
+  const draft = useAnswerDraft(q.data ? `iq-answer:${id}:${q.data.answers.length}` : undefined);
+  const { text, update: setText } = draft;
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
   const [speaking, setSpeaking] = useState(false);
@@ -79,6 +81,7 @@ function Room({ id }: { id: string }) {
       { id, data: { text: text.trim(), questionIndex: session.answers.length, transcriptId: transcript?.id } },
       {
         onSuccess: (s) => {
+          draft.clear();
           qc.setQueryData(getGetSessionQueryKey(id), s);
           qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
@@ -90,18 +93,22 @@ function Room({ id }: { id: string }) {
     );
   };
 
-  const doFinish = () =>
+  const doFinish = () => {
+    if (submit.isPending || transcribe.isPending || rec.state === "recording" || rec.state === "requesting") return;
+    if (text.trim() && !window.confirm("Finish without submitting this draft? Your unsent text will be discarded.")) return;
     finish.mutate({ id }, {
       onSuccess: (s) => {
+        draft.clear();
         qc.setQueryData(getGetSessionQueryKey(id), s);
         qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
         qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         setLocation(`/results/${id}`);
       },
     });
+  };
 
   const last = session.answers[session.answers.length - 1];
-  const busy = submit.isPending || transcribe.isPending;
+  const busy = submit.isPending || transcribe.isPending || finish.isPending;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -173,6 +180,9 @@ function Room({ id }: { id: string }) {
                   <span className="text-xs text-muted-foreground">Edit freely before submitting</span>
                 </div>
                 <Textarea id="answer" value={text} onChange={(e) => setText(e.target.value)} rows={7} placeholder="Your spoken answer appears here, or type it directly." className="resize-y bg-background text-[15px] leading-relaxed" disabled={submit.isPending} data-testid="input-answer" />
+                <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
+                  {draft.notice || "Unsent text is saved in this tab until submission. Audio is not saved."}
+                </p>
                 {transcript && (
                   <div className="mt-3 flex flex-wrap gap-2 font-mono text-[11px] text-muted-foreground" data-testid="text-speech-metrics">
                     <span className="rounded-full bg-secondary px-2.5 py-1">{Math.round(transcript.speakingRate)} wpm</span>
@@ -216,7 +226,7 @@ function Room({ id }: { id: string }) {
           </ul>
         </div>
         {!allAnswered && answered > 0 && (
-          <button onClick={doFinish} disabled={finish.isPending} className="w-full rounded-full border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-50" data-testid="button-end-early">
+          <button onClick={doFinish} disabled={busy || rec.state === "recording" || rec.state === "requesting"} className="w-full rounded-full border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-50" data-testid="button-end-early">
             {finish.isPending ? "Finishing" : "End session early"}
           </button>
         )}
