@@ -21,6 +21,7 @@ export * from './interviewInputCategory';
 export * from './interviewStatus';
 export * from './profile';
 export * from './rating';
+export * from './ratingFeedbackInput';
 export * from './ratingInput';
 export * from './resumeUpload';
 export * from './scores';

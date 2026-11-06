@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent } from "react";
 import { Link, useParams } from "wouter";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetSession, getGetSessionQueryKey, useSaveRating, getListSessionsQueryKey, type Answer, type Scores } from "@workspace/api-client-react";
+import { useGetSession, getGetSessionQueryKey, useSaveRating, useGenerateRatingFeedback, getListSessionsQueryKey, type Answer, type Scores } from "@workspace/api-client-react";
 import { ChevronDown, Lightbulb, Mic, UserCheck, Loader2, Info, Download } from "lucide-react";
 import { PageHeader, RequireAuth, ErrorState, PageSkeleton, ScoreRing, Bar } from "@/components/bits";
 import { Input } from "@/components/ui/input";
@@ -86,12 +86,25 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const save = useSaveRating();
+  const feedback = useGenerateRatingFeedback();
   const [idx, setIdx] = useState("0");
   const [rater, setRater] = useState("");
   const [notes, setNotes] = useState("");
+  const [savedForFeedback, setSavedForFeedback] = useState<{ answerIndex: number; rater: string } | null>(null);
   const [blindReviewed, setBlindReviewed] = useState(false);
   const [scores, setScores] = useState<Record<keyof Scores, string>>({ technicalAccuracy: "", clarity: "", completeness: "", star: "" });
   const [err, setErr] = useState<string | null>(null);
+
+  const requestFeedback = (target: { answerIndex: number; rater: string }) => {
+    feedback.mutate({ id, data: target }, {
+      onSuccess: (s) => {
+        qc.setQueryData(getGetSessionQueryKey(id), s);
+        qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+        setSavedForFeedback(null);
+        toast({ title: "Comparison feedback ready", description: "The LLM compared the human and automated scores." });
+      },
+    });
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -104,11 +117,15 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
       if (scores[d.k] === "" || !Number.isFinite(n) || n < 0 || n > 100) return setErr(`${d.label} must be 0-100.`);
       parsed[d.k] = n;
     }
-    save.mutate({ id, data: { answerIndex: Number(idx), rater: rater.trim(), scores: parsed, notes: notes.trim() || undefined, blindReviewed } }, {
+    const target = { answerIndex: Number(idx), rater: rater.trim() };
+    feedback.reset();
+    setSavedForFeedback(target);
+    save.mutate({ id, data: { ...target, scores: parsed, notes: notes.trim() || undefined, blindReviewed } }, {
       onSuccess: (s) => {
         qc.setQueryData(getGetSessionQueryKey(id), s);
         qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-        toast({ title: "Rating saved", description: "Stored as an independent, manually entered rating." });
+        toast({ title: "Rating saved", description: "Generating the score comparison now." });
+        requestFeedback(target);
         setScores({ technicalAccuracy: "", clarity: "", completeness: "", star: "" });
         setNotes("");
         setBlindReviewed(false);
@@ -138,7 +155,11 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
           </div>
         ))}
       </div>
-      <div className="space-y-1.5"><Label htmlFor="notes">Notes <span className="text-muted-foreground">(optional)</span></Label><Textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-notes" /></div>
+      <div className="space-y-1.5">
+        <Label htmlFor="notes">Human notes <span className="text-muted-foreground">(optional)</span></Label>
+        <Textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-notes" />
+        <p className="text-xs text-muted-foreground">You can save scores without notes. After saving, an LLM compares the human and automated scores.</p>
+      </div>
       <label className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
         <input
           type="checkbox"
@@ -150,7 +171,14 @@ function RatingForm({ id, answers }: { id: string; answers: Answer[] }) {
         I confirm the reviewer scored this answer without seeing its AI scores.
       </label>
       {(err || save.error) && <p className="text-sm text-destructive" data-testid="text-rating-error">{err ?? errMsg(save.error, "Could not save rating.")}</p>}
-      <button type="submit" disabled={save.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid="button-save-rating">
+      {feedback.isPending && <p className="text-sm text-muted-foreground" role="status" data-testid="status-rating-feedback"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Human rating saved. Generating immediate LLM feedback…</p>}
+      {feedback.error && savedForFeedback && (
+        <div className="space-y-2 rounded-xl bg-destructive/10 p-3 text-sm" data-testid="text-rating-feedback-error">
+          <p>The human rating is saved, but comparison feedback could not be generated.</p>
+          <button type="button" onClick={() => requestFeedback(savedForFeedback)} disabled={feedback.isPending} className="font-semibold underline">Retry LLM feedback</button>
+        </div>
+      )}
+      <button type="submit" disabled={save.isPending || feedback.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid="button-save-rating">
         {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save human rating
       </button>
     </form>
@@ -280,14 +308,23 @@ function View({ id }: { id: string }) {
                     {s.ratings.map((r, i) => {
                       const ai = s.answers[r.answerIndex];
                       return (
-                        <tr key={i} className="border-b last:border-0" data-testid={`row-rating-${i}`}>
-                          <td className="p-3 font-mono">{r.answerIndex + 1}</td>
-                          <td className="p-3"><p>{r.rater}</p>{r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}</td>
-                          {DIMS.map((d) => {
-                            const diff = ai ? r.scores[d.k] - ai.scores[d.k] : null;
-                            return <td key={d.k} className="p-3 font-mono">{r.scores[d.k]}{diff !== null && <span className={cn("ml-1 text-[10px]", diff >= 0 ? "text-[hsl(var(--chart-4))]" : "text-[hsl(var(--chart-3))]")}>{diff >= 0 ? "+" : ""}{Math.round(diff)}</span>}</td>;
-                          })}
-                        </tr>
+                        <Fragment key={`rating-${i}`}>
+                          <tr className="border-b last:border-0" data-testid={`row-rating-${i}`}>
+                            <td className="p-3 font-mono">{r.answerIndex + 1}</td>
+                            <td className="p-3"><p>{r.rater}</p>{r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}</td>
+                            {DIMS.map((d) => {
+                              const diff = ai ? r.scores[d.k] - ai.scores[d.k] : null;
+                              return <td key={d.k} className="p-3 font-mono">{r.scores[d.k]}{diff !== null && <span className={cn("ml-1 text-[10px]", diff >= 0 ? "text-[hsl(var(--chart-4))]" : "text-[hsl(var(--chart-3))]")}>{diff >= 0 ? "+" : ""}{Math.round(diff)}</span>}</td>;
+                            })}
+                          </tr>
+                          {r.llmFeedback && (
+                            <tr className="border-b bg-accent/10" data-testid={`row-rating-feedback-${i}`}>
+                              <td colSpan={2 + DIMS.length} className="px-3 py-3 text-xs leading-relaxed">
+                                <span className="font-semibold">LLM score comparison:</span> {r.llmFeedback}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

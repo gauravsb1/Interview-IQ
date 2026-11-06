@@ -425,6 +425,34 @@ def ratings(sid):
         return persist(interview)
 
 
+@app.post("/api/sessions/<sid>/ratings/feedback")
+@protected
+@limiter.limit("30 per hour")
+def generate_rating_feedback(sid):
+    with _session_locks[hash(sid) % 64]:
+        interview = owned_session(sid)
+        data = request.get_json()
+        index = data.get("answerIndex")
+        rater = str(data.get("rater", "")).strip()
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(interview["answers"]):
+            raise ValueError("Choose a valid answer.")
+        if not rater or len(rater) > 120:
+            raise ValueError("Choose the rater label used when saving this rating.")
+        rating = next(
+            (item for item in interview.get("ratings", [])
+             if item["answerIndex"] == index and str(item["rater"]).strip() == rater),
+            None,
+        )
+        if rating is None:
+            raise ValueError("Save the human rating before requesting comparison feedback.")
+        try:
+            rating["llmFeedback"] = intelligence.compare_human_rating(interview["answers"][index], rating)
+        except Exception as exc:
+            app.logger.warning("Human-rating comparison unavailable: %s", type(exc).__name__)
+            return jsonify(error="The human rating was saved, but comparison feedback is unavailable. Retry it."), 503
+        return persist(interview)
+
+
 @app.get("/api/dashboard")
 def dashboard():
     if not g.user:

@@ -127,6 +127,12 @@ export interface Rating {
   scores: Scores;
   notes?: string;
   blindReviewed?: boolean;
+  llmFeedback?: string;
+}
+
+export interface RatingFeedbackInput {
+  answerIndex: number;
+  rater: string;
 }
 
 export type InterviewStatus = typeof InterviewStatus[keyof typeof InterviewStatus];

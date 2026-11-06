@@ -13,4 +13,5 @@ export interface Rating {
   scores: Scores;
   notes?: string;
   blindReviewed?: boolean;
+  llmFeedback?: string;
 }

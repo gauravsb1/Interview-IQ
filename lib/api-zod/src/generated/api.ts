@@ -158,7 +158,8 @@ export const GetDashboardResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 }))
 })
@@ -227,7 +228,8 @@ export const ListSessionsResponseItem = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
@@ -319,7 +321,8 @@ export const CreateSessionResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 
@@ -391,7 +394,8 @@ export const GetSessionResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 
@@ -476,7 +480,8 @@ export const SubmitAnswerResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 
@@ -548,7 +553,8 @@ export const FinishSessionResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 
@@ -620,7 +626,8 @@ export const RetryQuestionResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 
@@ -720,7 +727,86 @@ export const SaveRatingResponse = zod.object({
   "star": zod.number()
 }),
   "notes": zod.string().optional(),
-  "blindReviewed": zod.boolean().optional()
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
+}))
+})
+
+
+export const GenerateRatingFeedbackParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GenerateRatingFeedbackBody = zod.object({
+  "answerIndex": zod.number().int(),
+  "rater": zod.string()
+})
+
+export const generateRatingFeedbackResponseTimeLimitMinutesMax = 120;
+
+
+
+
+export const GenerateRatingFeedbackResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.string(),
+  "role": zod.string(),
+  "company": zod.string(),
+  "companyContext": zod.string().optional(),
+  "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
+  "status": zod.enum(['active', 'completed']),
+  "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(generateRatingFeedbackResponseTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
+  "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
+  "nextQuestionPending": zod.boolean().optional(),
+  "answers": zod.array(zod.object({
+  "question": zod.string(),
+  "text": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "feedback": zod.string(),
+  "improvement": zod.string(),
+  "skill": zod.string(),
+  "speech": zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "duration": zod.number(),
+  "speakingRate": zod.number(),
+  "pauses": zod.number().int(),
+  "silenceDuration": zod.number(),
+  "fillerWords": zod.number().int()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
+})),
+  "score": zod.number(),
+  "ratings": zod.array(zod.object({
+  "answerIndex": zod.number().int(),
+  "rater": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
 }))
 })
 

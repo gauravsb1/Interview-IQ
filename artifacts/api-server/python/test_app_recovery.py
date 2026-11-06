@@ -189,7 +189,6 @@ class BlindRatingTests(unittest.TestCase):
             "rater": "Peer A",
             "scores": sample_scores()["scores"],
             "blindReviewed": True,
-            "notes": "Example-specific and clear.",
         }
         with api.app.test_request_context("/api/sessions/session-1/ratings", method="POST", json=data):
             g.user = {"id": "candidate-1"}
@@ -199,6 +198,75 @@ class BlindRatingTests(unittest.TestCase):
         rating = response.get_json()["ratings"][0]
         self.assertTrue(rating["blindReviewed"])
         self.assertEqual(rating["rater"], "Peer A")
+        self.assertEqual(rating["notes"], "")
+
+
+class RatingFeedbackTests(unittest.TestCase):
+    def _rated_interview(self):
+        interview = sample_interview()
+        interview["answers"] = [{
+            "question": "How did you improve reliability?",
+            "text": "I added retries and dashboards.",
+            "scores": sample_scores()["scores"],
+            "feedback": "Good concrete actions.",
+        }]
+        interview["ratings"] = [{
+            "answerIndex": 0,
+            "rater": "Peer A",
+            "scores": {"technicalAccuracy": 90, "clarity": 80, "completeness": 70, "star": 60},
+            "notes": "",
+            "blindReviewed": True,
+        }]
+        return interview
+
+    def test_comparison_prompt_receives_both_score_sets(self):
+        answer = self._rated_interview()["answers"][0]
+        rating = self._rated_interview()["ratings"][0]
+        with patch.object(
+            api.intelligence, "generate", return_value={"feedback": "The human reviewer scored accuracy higher."}
+        ) as generate:
+            feedback = api.intelligence.compare_human_rating(answer, rating)
+
+        self.assertIn("human reviewer", feedback)
+        comparison = generate.call_args.args[1]
+        self.assertEqual(comparison["automatedScores"], answer["scores"])
+        self.assertEqual(comparison["humanScores"], rating["scores"])
+        self.assertEqual(comparison["scoreDifferencesHumanMinusAI"]["technicalAccuracy"], 10)
+
+    def test_feedback_is_generated_and_persisted_on_the_saved_rating(self):
+        interview = self._rated_interview()
+        with api.app.test_request_context(
+            "/api/sessions/session-1/ratings/feedback",
+            method="POST",
+            json={"answerIndex": 0, "rater": "Peer A"},
+        ):
+            g.user = {"id": "candidate-1"}
+            with patch.object(api, "owned_session", return_value=interview), patch.object(
+                api.intelligence, "compare_human_rating", return_value="The ratings agree on clarity."
+            ) as compare, patch.object(api.storage, "save") as save:
+                response = api.app.view_functions["generate_rating_feedback"]("session-1")
+
+        rating = response.get_json()["ratings"][0]
+        self.assertEqual(rating["llmFeedback"], "The ratings agree on clarity.")
+        compare.assert_called_once_with(interview["answers"][0], interview["ratings"][0])
+        save.assert_called_once()
+
+    def test_feedback_failure_does_not_remove_the_saved_human_rating(self):
+        interview = self._rated_interview()
+        with api.app.test_request_context(
+            "/api/sessions/session-1/ratings/feedback",
+            method="POST",
+            json={"answerIndex": 0, "rater": "Peer A"},
+        ):
+            g.user = {"id": "candidate-1"}
+            with patch.object(api, "owned_session", return_value=interview), patch.object(
+                api.intelligence, "compare_human_rating", side_effect=RuntimeError("provider unavailable")
+            ), patch.object(api.storage, "save") as save:
+                response = api.app.make_response(api.app.view_functions["generate_rating_feedback"]("session-1"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(interview["ratings"][0]["rater"], "Peer A")
+        save.assert_not_called()
 
 
 if __name__ == "__main__":

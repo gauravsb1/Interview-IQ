@@ -276,30 +276,86 @@ def evaluate(interview, text):
     return result
 
 
+def compare_human_rating(answer, rating):
+    score_keys = ("technicalAccuracy", "clarity", "completeness", "star")
+    result = generate(
+        "Compare a blind human review with an automated practice-interview score. Return {feedback:string} with 2-4 concise sentences. Describe where the scores agree and the largest difference, using the supplied question, answer, rubric scores, and existing AI feedback. Do not assume either rater is correct, change scores, claim statistical validity from one answer, or assess hiring suitability.",
+        {
+            "question": answer["question"],
+            "answer": answer["text"],
+            "automatedScores": answer["scores"],
+            "automatedFeedback": answer.get("feedback", ""),
+            "humanScores": rating["scores"],
+            "humanNotes": rating.get("notes", ""),
+            "scoreDifferencesHumanMinusAI": {
+                key: round(rating["scores"][key] - answer["scores"][key], 1)
+                for key in score_keys
+            },
+        },
+    )
+    feedback = result.get("feedback")
+    if not isinstance(feedback, str) or not feedback.strip():
+        raise ValueError("The comparison feedback was empty. Please retry.")
+    return feedback.strip()
+
+
+def _speech_metrics(text, duration, words):
+    try:
+        duration = float(duration)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Could not read the audio duration. Please retry or type your answer.") from exc
+    if not math.isfinite(duration) or duration < 0:
+        raise ValueError("Could not read the audio duration. Please retry or type your answer.")
+
+    timed_words = []
+    for word in words:
+        try:
+            start = float(word.start)
+            end = float(word.end)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            continue
+        if math.isfinite(start) and math.isfinite(end) and end >= start:
+            timed_words.append((start, end))
+
+    gaps = [max(0.0, timed_words[i][0] - timed_words[i - 1][1]) for i in range(1, len(timed_words))]
+    speech_seconds = sum(max(0.0, end - start) for start, end in timed_words)
+    return {
+        "duration": round(duration, 2),
+        "speakingRate": round(len(re.findall(r"\b[\w']+\b", text)) * 60 / max(duration, 1)),
+        "pauses": sum(gap > 0.6 for gap in gaps),
+        "silenceDuration": round(max(0, duration - speech_seconds), 2) if timed_words else 0.0,
+        "fillerWords": len(re.findall(r"\b(um|uh|erm|like|you know|I mean)\b", text, re.I)),
+    }
+
+
 def transcribe_audio(path):
     global _whisper
-    import av
-    with av.open(path) as container:
-        if container.duration and container.duration / av.time_base > 300:
-            raise ValueError("Please record answers shorter than five minutes.")
     from faster_whisper import WhisperModel
     with _model_lock:
         if _whisper is None:
             _whisper = WhisperModel("base.en", device="cpu", compute_type="int8",
                                     download_root=str(Path(__file__).resolve().parents[3] / "generated-artifacts/models"))
-        segments, info = _whisper.transcribe(path, word_timestamps=True, vad_filter=False)
-        segments = list(segments)
-    if info.duration > 300:
-        raise ValueError("Please record answers shorter than five minutes.")
-    words = [word for segment in segments for word in (segment.words or [])]
-    text = " ".join(segment.text.strip() for segment in segments).strip()
+        try:
+            segments, info = _whisper.transcribe(path, word_timestamps=True, vad_filter=False)
+            segments = list(segments)
+        except TypeError:
+            # Some audio/model combinations fail while aligning word timestamps.
+            # Retry text transcription without optional timing data.
+            segments, info = _whisper.transcribe(path, vad_filter=False)
+            segments = list(segments)
+    words = []
+    segment_text = []
+    for segment in segments:
+        segment_words = getattr(segment, "words", None)
+        if segment_words:
+            try:
+                words.extend(segment_words)
+            except TypeError:
+                pass
+        value = getattr(segment, "text", "")
+        if isinstance(value, str) and value.strip():
+            segment_text.append(value.strip())
+    text = " ".join(segment_text).strip()
     if not text:
         raise ValueError("No speech detected. Please try again or type your answer.")
-    gaps = [max(0, words[i].start - words[i-1].end) for i in range(1, len(words))]
-    speech_seconds = sum(max(0, w.end - w.start) for w in words)
-    return {
-        "text": text, "duration": round(info.duration, 2),
-        "speakingRate": round(len(re.findall(r"\b[\w']+\b", text)) * 60 / max(info.duration, 1)),
-        "pauses": sum(gap > 0.6 for gap in gaps),
-        "silenceDuration": round(max(0, info.duration - speech_seconds), 2),
-        "fillerWords": len(re.findall(r"\b(um|uh|erm|like|you know|I mean)\b", text, re.I))}
+    return {"text": text, **_speech_metrics(text, info.duration, words)}

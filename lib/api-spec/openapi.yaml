@@ -206,6 +206,27 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Interview"}
+  /sessions/{id}/ratings/feedback:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: generateRatingFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RatingFeedbackInput"}
+      responses:
+        "200":
+          description: Interview with generated comparison feedback
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
+        "503":
+          description: The rating was saved but comparison feedback is unavailable
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
   /healthz:
     get:
       operationId: healthCheck
@@ -339,6 +360,13 @@ components:
         scores: {$ref: "#/components/schemas/Scores"}
         notes: {type: string}
         blindReviewed: {type: boolean}
+        llmFeedback: {type: string}
+    RatingFeedbackInput:
+      type: object
+      required: [answerIndex, rater]
+      properties:
+        answerIndex: {type: integer}
+        rater: {type: string}
     Interview:
       type: object
       required: [id, category, role, company, createdAt, status, questionCount, currentQuestion, answers, score, ratings]
