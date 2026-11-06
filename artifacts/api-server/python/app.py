@@ -191,7 +191,6 @@ def resume():
             raise ValueError("Choose a resume file.")
         result = intelligence.extract_resume(file)
         storage.save(g.user["id"], "profile", "profile-" + g.user["id"], result)
-        intelligence.clear_index(g.user["id"])
     return jsonify({k: v for k, v in result.items() if k != "text"})
 
 

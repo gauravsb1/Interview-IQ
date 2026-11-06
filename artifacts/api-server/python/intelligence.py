@@ -1,18 +1,23 @@
 import io
 import json
+import math
 import os
 import re
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 from google import genai
 from google.genai import types
 
 _ai_lock = threading.Lock()
 _last_call = 0.0
-_chroma = None
 _whisper = None
 _model_lock = threading.Lock()
+_WORD_RE = re.compile(r"[a-z0-9][a-z0-9+#._-]*")
+_STOP_WORDS = frozenset(
+    "a an and are as at be by for from in into is it of on or that the their this to with".split()
+)
 KNOWLEDGE = [
     "Technical: explain tradeoffs, complexity, correctness, failure cases and testing. Ask about a concrete project and its architecture.",
     "HR: explore motivation, collaboration, feedback and role fit. Do not ask about protected attributes or personal medical information.",
@@ -72,26 +77,44 @@ def extract_resume(file):
 
 
 def retrieve(uid, profile, query):
-    global _chroma
-    import chromadb
-    with _model_lock:
-        if _chroma is None:
-            # Ephemeral vector cache; durable source text stays in MySQL.
-            _chroma = chromadb.EphemeralClient()
-        collection = _chroma.get_or_create_collection("candidate-" + uid)
-        text = profile["text"]
-        chunks = [text[i:i + 1000] for i in range(0, len(text), 800)] + KNOWLEDGE
-        collection.upsert(ids=[str(i) for i in range(len(chunks))], documents=chunks)
-        result = collection.query(query_texts=[query], n_results=min(6, len(chunks)))
-    return result["documents"][0]
+    # Resume text is already stored durably in MySQL. Rank its local chunks
+    # directly so resume content is never sent to or indexed by a separate
+    # Chroma service. TF-IDF-style BM25 needs no model or additional dependency.
+    del uid  # Kept in the signature for compatibility with the interview flow.
+    text = profile["text"]
+    chunks = [text[i:i + 1000] for i in range(0, len(text), 800)] + KNOWLEDGE
+    documents = [
+        [token for token in _WORD_RE.findall(chunk.casefold()) if token not in _STOP_WORDS]
+        for chunk in chunks
+    ]
+    terms = set(_WORD_RE.findall(query.casefold())) - _STOP_WORDS
+    if not terms:
+        return chunks[:6]
 
+    frequencies = [Counter(tokens) for tokens in documents]
+    document_frequency = Counter(
+        term for tokens in documents for term in set(tokens)
+    )
+    average_length = sum(map(len, documents)) / max(len(documents), 1)
+    k1, b = 1.5, 0.75
+    scores = []
+    for index, token_frequencies in enumerate(frequencies):
+        length = len(documents[index])
+        score = 0.0
+        for term in terms:
+            term_frequency = token_frequencies[term]
+            if not term_frequency:
+                continue
+            inverse_frequency = math.log(
+                1 + (len(chunks) - document_frequency[term] + 0.5)
+                / (document_frequency[term] + 0.5)
+            )
+            length_norm = k1 * (1 - b + b * length / max(average_length, 1))
+            score += inverse_frequency * (term_frequency * (k1 + 1)) / (term_frequency + length_norm)
+        scores.append((score, index))
 
-def clear_index(uid):
-    if _chroma is not None:
-        try:
-            _chroma.delete_collection("candidate-" + uid)
-        except Exception:
-            pass
+    ranked = sorted(scores, key=lambda item: (-item[0], item[1]))
+    return [chunks[index] for _, index in ranked[:6]]
 
 
 def question(uid, profile, interview):
