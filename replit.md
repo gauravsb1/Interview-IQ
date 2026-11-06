@@ -10,7 +10,7 @@ Resume-grounded interview practice with Gemini, spoken answers and longitudinal 
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- MySQL uses MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD; MYSQL_SSL_CA accepts a provider CA certificate in PEM format when needed. Never disable TLS verification.
+- MySQL uses MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD. The public Aiven CA is bundled at artifacts/api-server/python/certs/aiven-ca.pem; replace it with Aiven's updated CA bundle on rotation. The older MYSQL_SSL_CA secret is no longer used. Never disable TLS verification.
 
 ## Stack
 

@@ -2,13 +2,15 @@
 import json
 import os
 import ssl
+from pathlib import Path
 import pymysql
 
 
 def connect():
     tls = ssl.create_default_context()
-    if os.environ.get("MYSQL_SSL_CA"):
-        tls.load_verify_locations(cadata=os.environ["MYSQL_SSL_CA"])
+    # Public CA supplied by the database owner; not a credential.
+    # Keep hostname and certificate verification enabled.
+    tls.load_verify_locations(cafile=str(Path(__file__).parent / "certs" / "aiven-ca.pem"))
     return pymysql.connect(
         host=os.environ["MYSQL_HOST"], port=int(os.environ["MYSQL_PORT"]),
         user=os.environ["MYSQL_USER"], password=os.environ["MYSQL_PASSWORD"],
