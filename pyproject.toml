@@ -8,6 +8,7 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "bcrypt>=5.0.0",
+    "chromadb>=1.5.9",
     "cryptography>=50.0.2",
     "fastembed>=0.9.1",
     "faster-whisper>=1.2.1",

@@ -209,6 +209,15 @@ def persist(interview):
     return jsonify(interview)
 
 
+def cleanup_session_index(uid, sid, fail_on_error=False):
+    try:
+        intelligence.delete_session_index(uid, sid)
+    except Exception as exc:
+        app.logger.warning("Session retrieval index cleanup failed: %s", type(exc).__name__)
+        if fail_on_error:
+            raise
+
+
 @app.route("/api/sessions", methods=["GET", "POST"])
 @protected
 @limiter.limit("20 per hour", methods=["POST"])
@@ -238,7 +247,11 @@ def sessions():
                      companyContext=company_context,
                      createdAt=datetime.now(timezone.utc).isoformat(), status="active",
                      questionCount=count, answers=[], ratings=[], score=0, currentQuestion="")
-    question = intelligence.question(g.user["id"], p, interview)
+    try:
+        question = intelligence.question(g.user["id"], p, interview)
+    except Exception:
+        cleanup_session_index(g.user["id"], interview["id"])
+        raise
     interview["currentQuestion"] = question["question"]
     interview["currentContext"] = question["context"]
     return persist(interview)
@@ -250,6 +263,7 @@ def session(sid):
     with _session_locks[hash(sid) % 64]:
         result = owned_session(sid)
         if request.method == "DELETE":
+            cleanup_session_index(g.user["id"], sid, fail_on_error=True)
             storage.delete(g.user["id"], "session", sid)
             return jsonify(ok=True)
         return jsonify(result)
@@ -280,7 +294,9 @@ def answer(sid):
         interview["answers"].append(result)
         if len(interview["answers"]) >= interview["questionCount"]:
             interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
-            return persist(interview)
+            response = persist(interview)
+            cleanup_session_index(g.user["id"], sid)
+            return response
 
         # Commit the evaluated answer before asking Gemini for another question.
         # A provider outage must not make the candidate submit (and pay to score)
@@ -325,7 +341,9 @@ def finish(sid):
     with _session_locks[hash(sid) % 64]:
         interview = owned_session(sid)
         interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
-        return persist(interview)
+        response = persist(interview)
+        cleanup_session_index(g.user["id"], sid)
+        return response
 
 
 @app.post("/api/transcribe")
