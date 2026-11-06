@@ -212,6 +212,7 @@ function Room({ id }: { id: string }) {
                     <span className="rounded-full bg-secondary px-2.5 py-1">{Math.round(transcript.speakingRate)} wpm</span>
                     <span className="rounded-full bg-secondary px-2.5 py-1">{transcript.duration.toFixed(1)}s</span>
                     <span className="rounded-full bg-secondary px-2.5 py-1">{transcript.pauses} pauses</span>
+                    <span className="rounded-full bg-secondary px-2.5 py-1">{transcript.silenceDuration.toFixed(1)}s not speaking</span>
                     <span className="rounded-full bg-secondary px-2.5 py-1">{transcript.fillerWords} fillers</span>
                   </div>
                 )}

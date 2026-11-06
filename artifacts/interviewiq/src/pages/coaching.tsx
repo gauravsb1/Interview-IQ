@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/bits";
 import { PostureCoach } from "@/components/posture-coach";
-import { Pause, Play } from "lucide-react";
+import { Activity, MessageSquareText, Pause, Play, Timer, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PHASES = [
@@ -52,6 +52,29 @@ const STAR = [
   { l: "R", t: "Result", d: "Quantify, then reflect on what you'd repeat.", ex: "Timeouts fell to 0.1% and we used the pattern for two more services." },
 ];
 
+const SPEECH_SIGNALS = [
+  {
+    label: "Speaking rate",
+    icon: Volume2,
+    detail: "Estimated words per minute, based on the transcript and recording length. Compare your own answers; it is not a target score.",
+  },
+  {
+    label: "Pauses",
+    icon: Pause,
+    detail: "Estimated gaps between recognized words. A pause can give you time to organize an answer; this count does not grade you.",
+  },
+  {
+    label: "Time not speaking",
+    icon: Timer,
+    detail: "Approximate recording time outside recognized word spans. It can include pauses and silence at the beginning or end.",
+  },
+  {
+    label: "Filler words",
+    icon: MessageSquareText,
+    detail: "An approximate count of common fillers detected in the transcript. Speech recognition can mishear words, so check the editable transcript.",
+  },
+];
+
 export default function CoachingPage() {
   const [active, setActive] = useState(0);
   return (
@@ -79,6 +102,23 @@ export default function CoachingPage() {
           </ul>
         </div>
       </div>
+      <section className="mt-10" aria-labelledby="speech-feedback-title">
+        <div className="mb-4 flex items-center gap-2">
+          <Activity className="h-5 w-5 text-primary" />
+          <h2 id="speech-feedback-title" className="font-display text-2xl font-semibold">How to read speaking feedback</h2>
+        </div>
+        <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
+          These are approximate transcript and timing signals for practice, not measures of confidence, stress, or interview success. They can vary with the microphone, background noise, accent, and speech recognition.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {SPEECH_SIGNALS.map(({ label, icon: Icon, detail }) => (
+            <article key={label} className="rounded-2xl border bg-card p-5">
+              <h3 className="flex items-center gap-2 font-semibold"><Icon className="h-4 w-4 text-primary" />{label}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
       <section className="mt-12">
         <h2 className="font-display text-2xl font-semibold">Camera presence check</h2>
         <p className="mb-5 mt-1 text-sm text-muted-foreground">Optional. Checks whether you face the lens and sit level in frame.</p>
