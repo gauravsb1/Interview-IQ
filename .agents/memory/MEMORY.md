@@ -1,3 +1,4 @@
 - [External MySQL TLS](interviewiq.md) — server presents a self-signed chain; require the provider CA, never disable verification.
 - [Auth privacy boundaries](auth-boundaries.md) — sign-out must discard mounted personal results, not only clear cached requests.
 - [Safe semantic retrieval](semantic-retrieval.md) — keep resume embeddings local, per-user, and rebuildable; don't restore vulnerable ChromaDB.
+- [Owner-only analytics](admin-privacy.md) — candidate records and analytics belong in a separate owner-authenticated dashboard.
