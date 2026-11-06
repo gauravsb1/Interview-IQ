@@ -190,7 +190,92 @@ export interface Dashboard {
   recentSessions: Interview[];
 }
 
+export interface AdminLoginInput {
+  email: string;
+  /** @minLength 12 */
+  password: string;
+}
+
+export interface AdminSession {
+  authenticated: boolean;
+}
+
+export type AdminOverviewSessionsByMonthItem = {
+  month: string;
+  sessions: number;
+  answers: number;
+};
+
+export type AdminOverviewPerformanceByCategoryItem = {
+  category: string;
+  sessions: number;
+  averageScore: number;
+};
+
+export interface AdminOverview {
+  totalUsers: number;
+  totalSessions: number;
+  completedSessions: number;
+  totalAnswers: number;
+  /** @nullable */
+  averageScore: number | null;
+  sessionsByMonth: AdminOverviewSessionsByMonthItem[];
+  performanceByCategory: AdminOverviewPerformanceByCategoryItem[];
+}
+
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  lastLoginAt: string;
+  totalSessions: number;
+  totalAnswers: number;
+  /** @nullable */
+  averageScore: number | null;
+}
+
+export interface AdminUsersPage {
+  users: AdminUserSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminProfile {
+  filename?: string;
+  text?: string;
+  skills?: string[];
+  projects?: string[];
+  education?: string[];
+  certifications?: string[];
+  experience?: string[];
+}
+
+export interface AdminUserDetail {
+  user: AdminUserSummary;
+  profile: AdminProfile;
+  sessions: Interview[];
+  transcripts: Transcript[];
+}
+
 export interface HealthStatus {
   status: string;
 }
+
+export type GetAdminUsersParams = {
+/**
+ * @maxLength 120
+ */
+q?: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+};
 

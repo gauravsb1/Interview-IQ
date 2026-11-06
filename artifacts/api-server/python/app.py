@@ -1,4 +1,5 @@
 import functools
+import hmac
 import json
 import logging
 import os
@@ -82,6 +83,37 @@ def protected(fn):
     return wrapped
 
 
+def admin_email():
+    return os.environ.get("INTERVIEWIQ_ADMIN_EMAIL", "").strip().lower()
+
+
+def valid_admin_session():
+    token = request.cookies.get("iq_admin_session")
+    configured_email = admin_email()
+    if not token or not configured_email:
+        return False
+    try:
+        claims = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            audience="interviewiq-admin",
+            options={"require": ["exp", "sub", "aud", "iat"]},
+        )
+        return hmac.compare_digest(str(claims.get("sub", "")).lower(), configured_email)
+    except jwt.InvalidTokenError:
+        return False
+
+
+def admin_protected(fn):
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not valid_admin_session():
+            return jsonify(error="Admin sign-in is required."), 401
+        return fn(*args, **kwargs)
+    return wrapped
+
+
 def public_user(user):
     return {key: user[key] for key in ("id", "name", "email")}
 
@@ -138,7 +170,7 @@ def register():
     try:
         with storage.connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO iq_users(id,email,name,password_hash) VALUES(%s,%s,%s,%s)",
+                cur.execute("INSERT INTO iq_users(id,email,name,password_hash,created_at,last_login_at) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())",
                             (user["id"], email, name, hashed))
             conn.commit()
     except pymysql.IntegrityError:
@@ -160,6 +192,10 @@ def login():
             user = cur.fetchone()
     if not user or not bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
         return jsonify(error="Invalid email or password."), 401
+    with storage.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE iq_users SET last_login_at=UTC_TIMESTAMP() WHERE id=%s", (user["id"],))
+        conn.commit()
     return sign_in(user)
 
 
@@ -173,6 +209,87 @@ def logout():
     response = jsonify(ok=True)
     response.delete_cookie("iq_session", path="/", secure=True, httponly=True, samesite="Lax")
     return response
+
+
+@app.get("/api/admin/session")
+def get_admin_session():
+    return jsonify(authenticated=valid_admin_session())
+
+
+@app.post("/api/admin/login")
+@limiter.limit("5 per minute")
+def admin_login():
+    expected_email = admin_email()
+    expected_password = os.environ.get("INTERVIEWIQ_ADMIN_PASSWORD", "")
+    if not expected_email or len(expected_password) < 12:
+        return jsonify(error="Admin sign-in is not configured yet."), 503
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+    email_matches = hmac.compare_digest(email, expected_email)
+    password_matches = hmac.compare_digest(password, expected_password)
+    if not (email_matches and password_matches):
+        return jsonify(error="Invalid admin email or password."), 401
+    now = datetime.now(timezone.utc)
+    token = jwt.encode(
+        {"sub": expected_email, "aud": "interviewiq-admin", "iat": now,
+         "exp": now + timedelta(hours=8)},
+        secret,
+        algorithm="HS256",
+    )
+    response = jsonify(authenticated=True)
+    response.set_cookie(
+        "iq_admin_session", token, httponly=True, secure=True,
+        samesite="Strict", max_age=8 * 60 * 60, path="/api/admin",
+    )
+    return response
+
+
+@app.post("/api/admin/logout")
+def admin_logout():
+    response = jsonify(ok=True)
+    response.delete_cookie(
+        "iq_admin_session", path="/api/admin", secure=True,
+        httponly=True, samesite="Strict",
+    )
+    return response
+
+
+@app.get("/api/admin/overview")
+@admin_protected
+@limiter.limit("60 per minute")
+def admin_overview():
+    ensure_db()
+    return jsonify(storage.admin_overview())
+
+
+@app.get("/api/admin/users")
+@admin_protected
+@limiter.limit("60 per minute")
+def admin_users():
+    try:
+        limit = int(request.args.get("limit", "25"))
+        offset = int(request.args.get("offset", "0"))
+    except ValueError as exc:
+        raise ValueError("Use whole numbers for the page size and offset.") from exc
+    search = request.args.get("q", "").strip()
+    if not 1 <= limit <= 100 or not 0 <= offset <= 1_000_000:
+        raise ValueError("Choose a page size from 1 to 100 and a non-negative offset.")
+    if len(search) > 120:
+        raise ValueError("Search text must be 120 characters or fewer.")
+    ensure_db()
+    return jsonify(storage.admin_users(limit=limit, offset=offset, search=search))
+
+
+@app.get("/api/admin/users/<user_id>")
+@admin_protected
+@limiter.limit("60 per minute")
+def admin_user(user_id):
+    ensure_db()
+    detail = storage.admin_user_detail(user_id)
+    if detail is None:
+        return jsonify(error="User not found."), 404
+    return jsonify(detail)
 
 
 def profile():

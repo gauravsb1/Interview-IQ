@@ -227,6 +227,81 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ErrorResponse"}
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      responses:
+        "200":
+          description: Whether this browser has an authenticated admin session
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminSession"}
+  /admin/login:
+    post:
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AdminLoginInput"}
+      responses:
+        "200":
+          description: Admin session established
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminSession"}
+        "401":
+          description: Invalid admin credentials
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      responses:
+        "200":
+          description: Admin session cleared
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DeleteProfileResult"}
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      responses:
+        "200":
+          description: Aggregate user and interview performance metrics
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminOverview"}
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      parameters:
+        - {name: q, in: query, required: false, schema: {type: string, maxLength: 120}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 25}}
+        - {name: offset, in: query, required: false, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Paginated user summaries with interview performance
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminUsersPage"}
+  /admin/users/{user_id}:
+    parameters:
+      - {name: user_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getAdminUser
+      responses:
+        "200":
+          description: Full stored profile, interview answers, scores, and transcripts for one user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminUserDetail"}
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
   /healthz:
     get:
       operationId: healthCheck
@@ -413,6 +488,82 @@ components:
         trends: {type: array, items: {$ref: "#/components/schemas/Trend"}}
         skills: {type: array, items: {$ref: "#/components/schemas/Skill"}}
         recentSessions: {type: array, items: {$ref: "#/components/schemas/Interview"}}
+    AdminLoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 12}
+    AdminSession:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: {type: boolean}
+    AdminOverview:
+      type: object
+      required: [totalUsers, totalSessions, completedSessions, totalAnswers, averageScore, sessionsByMonth, performanceByCategory]
+      properties:
+        totalUsers: {type: integer}
+        totalSessions: {type: integer}
+        completedSessions: {type: integer}
+        totalAnswers: {type: integer}
+        averageScore: {type: number, nullable: true}
+        sessionsByMonth:
+          type: array
+          items:
+            type: object
+            required: [month, sessions, answers]
+            properties:
+              month: {type: string}
+              sessions: {type: integer}
+              answers: {type: integer}
+        performanceByCategory:
+          type: array
+          items:
+            type: object
+            required: [category, sessions, averageScore]
+            properties:
+              category: {type: string}
+              sessions: {type: integer}
+              averageScore: {type: number}
+    AdminUserSummary:
+      type: object
+      required: [id, name, email, createdAt, lastLoginAt, totalSessions, totalAnswers, averageScore]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        email: {type: string, format: email}
+        createdAt: {type: string}
+        lastLoginAt: {type: string}
+        totalSessions: {type: integer}
+        totalAnswers: {type: integer}
+        averageScore: {type: number, nullable: true}
+    AdminUsersPage:
+      type: object
+      required: [users, total, limit, offset]
+      properties:
+        users: {type: array, items: {$ref: "#/components/schemas/AdminUserSummary"}}
+        total: {type: integer}
+        limit: {type: integer}
+        offset: {type: integer}
+    AdminProfile:
+      type: object
+      properties:
+        filename: {type: string}
+        text: {type: string}
+        skills: {type: array, items: {type: string}}
+        projects: {type: array, items: {type: string}}
+        education: {type: array, items: {type: string}}
+        certifications: {type: array, items: {type: string}}
+        experience: {type: array, items: {type: string}}
+    AdminUserDetail:
+      type: object
+      required: [user, profile, sessions, transcripts]
+      properties:
+        user: {$ref: "#/components/schemas/AdminUserSummary"}
+        profile: {$ref: "#/components/schemas/AdminProfile"}
+        sessions: {type: array, items: {$ref: "#/components/schemas/Interview"}}
+        transcripts: {type: array, items: {$ref: "#/components/schemas/Transcript"}}
     HealthStatus:
       type: object
       properties:

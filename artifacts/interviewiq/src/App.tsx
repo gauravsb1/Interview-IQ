@@ -14,27 +14,39 @@ import InterviewPage from '@/pages/interview';
 import HistoryPage from '@/pages/history';
 import ResultsPage from '@/pages/results';
 import CoachingPage from '@/pages/coaching';
+import AdminPage from '@/pages/admin';
+import AdminUserPage from '@/pages/admin-user';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
-function Router() {
+function CandidateRoutes() {
   return (
     <Shell>
-      <RoutedErrorBoundary>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/login">{() => <AuthPage mode="login" />}</Route>
-          <Route path="/register">{() => <AuthPage mode="register" />}</Route>
-          <Route path="/resume" component={ResumePage} />
-          <Route path="/practice" component={PracticePage} />
-          <Route path="/interview/:id" component={InterviewPage} />
-          <Route path="/history" component={HistoryPage} />
-          <Route path="/results/:id" component={ResultsPage} />
-          <Route path="/coaching" component={CoachingPage} />
-          <Route component={NotFound} />
-        </Switch>
-      </RoutedErrorBoundary>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/login">{() => <AuthPage mode="login" />}</Route>
+        <Route path="/register">{() => <AuthPage mode="register" />}</Route>
+        <Route path="/resume" component={ResumePage} />
+        <Route path="/practice" component={PracticePage} />
+        <Route path="/interview/:id" component={InterviewPage} />
+        <Route path="/history" component={HistoryPage} />
+        <Route path="/results/:id" component={ResultsPage} />
+        <Route path="/coaching" component={CoachingPage} />
+        <Route component={NotFound} />
+      </Switch>
     </Shell>
+  );
+}
+
+function Router() {
+  return (
+    <RoutedErrorBoundary>
+      <Switch>
+        <Route path="/admin/users/:id" component={AdminUserPage} />
+        <Route path="/admin" component={AdminPage} />
+        <Route component={CandidateRoutes} />
+      </Switch>
+    </RoutedErrorBoundary>
   );
 }
 

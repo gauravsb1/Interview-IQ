@@ -811,6 +811,185 @@ export const GenerateRatingFeedbackResponse = zod.object({
 })
 
 
+export const GetAdminSessionResponse = zod.object({
+  "authenticated": zod.boolean()
+})
+
+
+export const adminLoginBodyPasswordMin = 12;
+
+
+
+export const AdminLoginBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(adminLoginBodyPasswordMin)
+})
+
+export const AdminLoginResponse = zod.object({
+  "authenticated": zod.boolean()
+})
+
+
+export const AdminLogoutResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const GetAdminOverviewResponse = zod.object({
+  "totalUsers": zod.number().int(),
+  "totalSessions": zod.number().int(),
+  "completedSessions": zod.number().int(),
+  "totalAnswers": zod.number().int(),
+  "averageScore": zod.number().nullable(),
+  "sessionsByMonth": zod.array(zod.object({
+  "month": zod.string(),
+  "sessions": zod.number().int(),
+  "answers": zod.number().int()
+})),
+  "performanceByCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "sessions": zod.number().int(),
+  "averageScore": zod.number()
+}))
+})
+
+
+export const getAdminUsersQueryQMax = 120;
+
+export const getAdminUsersQueryLimitDefault = 25;
+export const getAdminUsersQueryLimitMax = 100;
+
+export const getAdminUsersQueryOffsetDefault = 0;
+export const getAdminUsersQueryOffsetMin = 0;
+
+
+
+export const GetAdminUsersQueryParams = zod.object({
+  "q": zod.coerce.string().max(getAdminUsersQueryQMax).optional(),
+  "limit": zod.coerce.number().int().min(1).max(getAdminUsersQueryLimitMax).default(getAdminUsersQueryLimitDefault),
+  "offset": zod.coerce.number().int().min(getAdminUsersQueryOffsetMin).default(getAdminUsersQueryOffsetDefault)
+})
+
+export const GetAdminUsersResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "createdAt": zod.string(),
+  "lastLoginAt": zod.string(),
+  "totalSessions": zod.number().int(),
+  "totalAnswers": zod.number().int(),
+  "averageScore": zod.number().nullable()
+})),
+  "total": zod.number().int(),
+  "limit": zod.number().int(),
+  "offset": zod.number().int()
+})
+
+
+export const GetAdminUserParams = zod.object({
+  "user_id": zod.coerce.string()
+})
+
+export const getAdminUserResponseSessionsItemTimeLimitMinutesMax = 120;
+
+
+
+
+export const GetAdminUserResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "createdAt": zod.string(),
+  "lastLoginAt": zod.string(),
+  "totalSessions": zod.number().int(),
+  "totalAnswers": zod.number().int(),
+  "averageScore": zod.number().nullable()
+}),
+  "profile": zod.object({
+  "filename": zod.string().optional(),
+  "text": zod.string().optional(),
+  "skills": zod.array(zod.string()).optional(),
+  "projects": zod.array(zod.string()).optional(),
+  "education": zod.array(zod.string()).optional(),
+  "certifications": zod.array(zod.string()).optional(),
+  "experience": zod.array(zod.string()).optional()
+}),
+  "sessions": zod.array(zod.object({
+  "id": zod.string(),
+  "category": zod.string(),
+  "role": zod.string(),
+  "company": zod.string(),
+  "companyContext": zod.string().optional(),
+  "createdAt": zod.string(),
+  "startedAt": zod.coerce.date().optional(),
+  "deadlineAt": zod.coerce.date().optional(),
+  "status": zod.enum(['active', 'completed']),
+  "questionCount": zod.number().int(),
+  "timeLimitMinutes": zod.number().int().min(1).max(getAdminUserResponseSessionsItemTimeLimitMinutesMax).optional(),
+  "recordingLimitMinutes": zod.number().int().min(1).optional(),
+  "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
+  "nextQuestionPending": zod.boolean().optional(),
+  "answers": zod.array(zod.object({
+  "question": zod.string(),
+  "text": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "feedback": zod.string(),
+  "improvement": zod.string(),
+  "skill": zod.string(),
+  "speech": zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "duration": zod.number(),
+  "speakingRate": zod.number(),
+  "pauses": zod.number().int(),
+  "silenceDuration": zod.number(),
+  "fillerWords": zod.number().int()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
+})),
+  "score": zod.number(),
+  "ratings": zod.array(zod.object({
+  "answerIndex": zod.number().int(),
+  "rater": zod.string(),
+  "scores": zod.object({
+  "technicalAccuracy": zod.number(),
+  "clarity": zod.number(),
+  "completeness": zod.number(),
+  "star": zod.number()
+}),
+  "notes": zod.string().optional(),
+  "blindReviewed": zod.boolean().optional(),
+  "llmFeedback": zod.string().optional()
+}))
+})),
+  "transcripts": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "duration": zod.number(),
+  "speakingRate": zod.number(),
+  "pauses": zod.number().int(),
+  "silenceDuration": zod.number(),
+  "fillerWords": zod.number().int()
+}))
+})
+
+
 /**
  * Returns server health status
  * @summary Health check
