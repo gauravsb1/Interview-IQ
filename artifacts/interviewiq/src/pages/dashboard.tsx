@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowUpRight, Mic, FileText, TrendingUp, TrendingDown, Eye } from "lucide-react";
+import { ArrowUpRight, ArrowRight, Mic, FileText, TrendingUp, TrendingDown, Eye, Target } from "lucide-react";
 import { PageHeader, ScoreRing, Bar, ErrorState, EmptyState, PageSkeleton } from "@/components/bits";
 import { useAuth, errMsg, CATEGORY_LABEL } from "@/lib/auth";
 
@@ -17,6 +17,20 @@ export default function Dashboard() {
   const d = q.data;
   if (!user && !d.demo) return <PageSkeleton />;
   const up = d.improvement >= 0;
+  const focus = !d.demo && d.skills.length
+    ? [...d.skills].sort((a, b) => a.score - b.score)[0]
+    : null;
+  const activeSession = d.recentSessions.find((session) => session.status === "active");
+  const focusLabel = focus?.name.toLowerCase() ?? "";
+  const focusAdvice = focusLabel.includes("star") || focusLabel.includes("behavior")
+    ? "Use the STAR guide to make the situation, your contribution, and the result easy to follow."
+    : focusLabel.includes("technical") || focusLabel.includes("accuracy")
+      ? "Explain your reasoning and trade-offs, then describe how you checked the result."
+      : focusLabel.includes("clarity") || focusLabel.includes("communication")
+        ? "Start with the main point, then support it with one concrete example."
+        : focusLabel.includes("complete")
+          ? "Include what you personally did and what changed as a result."
+          : "Practice one specific example, your contribution, and the outcome.";
 
   return (
     <div>
@@ -68,6 +82,50 @@ export default function Dashboard() {
             </>
           ) : <p className="mt-4 text-sm text-muted-foreground">Appears after your first evaluated answer.</p>}
         </div>
+
+        {user && !d.demo && (
+          <section className="rise rise-4 flex flex-col gap-4 rounded-3xl border border-accent/50 bg-accent/10 p-5 sm:flex-row sm:items-center sm:justify-between md:col-span-12" aria-labelledby="next-focus-title" data-testid="card-next-focus">
+            {focus ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/60 text-primary">
+                    <Target className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">From your evaluated answers</p>
+                    <h2 id="next-focus-title" className="mt-1 font-display text-lg font-semibold">A next practice focus: {focus.name}</h2>
+                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{focusAdvice}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">A coaching signal from your saved sessions, not a hiring prediction.</p>
+                  </div>
+                </div>
+                <Link
+                  href={focusLabel.includes("star") || focusLabel.includes("behavior") ? "/coaching" : "/practice"}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                  data-testid="link-next-focus"
+                >
+                  {focusLabel.includes("star") || focusLabel.includes("behavior") ? "Open STAR guide" : "Practice again"}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/60 text-primary">
+                    <Target className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Your next practice focus</p>
+                    <h2 id="next-focus-title" className="mt-1 font-display text-lg font-semibold">Complete an answer to get tailored guidance</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Your dashboard will suggest a focus from your evaluated answers—not from sample data.</p>
+                  </div>
+                </div>
+                <Link href={activeSession ? `/interview/${activeSession.id}` : d.totalSessions ? "/history" : "/resume"} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90" data-testid="link-next-focus">
+                  {activeSession ? "Continue interview" : d.totalSessions ? "View session history" : "Upload a resume"} <ArrowRight className="h-4 w-4" />
+                </Link>
+              </>
+            )}
+          </section>
+        )}
 
         <div className="rise rise-2 rounded-3xl border bg-card p-6 md:col-span-8">
           <div className="mb-4 flex items-baseline justify-between">
