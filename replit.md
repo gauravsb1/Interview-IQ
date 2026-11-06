@@ -1,44 +1,49 @@
-# [Project name]
+# InterviewIQ
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Resume-grounded interview practice with Gemini, spoken answers and longitudinal feedback.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- The managed API workflow runs `uv run python artifacts/api-server/python/run.py`.
+- The managed web workflow runs `pnpm --filter @workspace/interviewiq run dev`.
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- MySQL uses MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD; MYSQL_SSL_CA accepts a provider CA certificate in PEM format when needed. Never disable TLS verification.
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
+- API: Flask + Gunicorn; the scaffold Express files are not the active service.
+- DB: user-requested external MySQL via PyMySQL. No application data is stored in the scaffold PostgreSQL package.
+- Authentication: user-requested JWT in secure HTTP-only cookies and Bcrypt; logout revokes tokens through token versions.
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Python dependencies: pyproject.toml + uv.lock.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+Frontend: artifacts/interviewiq. Backend: artifacts/api-server/python. API contract: lib/api-spec/openapi.yaml.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Resume and audio file bytes are processed transiently, not retained. Extracted resume text and transcripts are stored in MySQL.
+- Chroma is a rebuildable in-memory embedding index, with MySQL as the durable source. This avoids relying on deployment-local storage for user data.
+- One threaded Gunicorn worker owns the Chroma/Whisper caches and session mutation locks. Scale-out requires shared locking and rate-limit storage.
+- Human comparisons are manually supplied ratings, not a claim of independent validation. Webcam coaching must never infer emotion, stress or employability.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Resume extraction; technical, HR, behavioral and company-specific mock interviews; Gemini questions and evaluations; faster-whisper speech transcription; history, skill analysis and human-rating comparisons.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Requested stack: React, Python Flask, MySQL, ChromaDB, Gemini, JWT and Bcrypt, faster-whisper, client-side MediaPipe.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+Public dashboard sample data is labeled and never represents a signed-in user's results. A failing database must produce an explicit error, not an in-memory persistence fallback.
+Whisper and Chroma's embedding model download on first use; allow time and memory for CPU inference. Audio timing is approximate word-alignment feedback, not a physiological measure.
 
 ## Pointers
 

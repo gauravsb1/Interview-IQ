@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "InterviewIQ"
+description = "Personalized mock interviews grounded in your resume, with voice answers, adaptive follow-ups, and detailed performance feedback."
+version = "1.0.0"
+id = "artifacts/interviewiq"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26250
+
+[services.development]
+run = "pnpm --filter @workspace/interviewiq run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/interviewiq", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/interviewiq/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26250"
+BASE_PATH = "/"

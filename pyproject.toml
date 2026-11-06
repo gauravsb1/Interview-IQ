@@ -1,0 +1,29 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Gaurav", email = "67547062-gaurav1237@users.noreply.replit.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "chromadb>=1.5.9",
+    "cryptography>=50.0.2",
+    "faster-whisper>=1.2.1",
+    "flask>=3.1.3",
+    "flask-limiter>=4.1.1",
+    "google-genai>=3.0.0",
+    "gunicorn>=26.2.0",
+    "pyjwt>=2.15.1",
+    "pymysql>=1.2.3",
+    "pypdf>=6.21.4",
+    "python-docx>=1.2.0",
+]
+
+[project.scripts]
+repl-nix-workspace = "repl_nix_workspace:main"
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"

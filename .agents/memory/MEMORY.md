@@ -1,0 +1,1 @@
+- [External MySQL TLS](interviewiq.md) — server presents a self-signed chain; require the provider CA, never disable verification.

@@ -11,6 +11,177 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /auth/me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+  /auth/register:
+    post:
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Credentials"}
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Credentials"}
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "200":
+          description: Signed out
+  /profile:
+    get:
+      operationId: getProfile
+      responses:
+        "200":
+          description: Extracted resume
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Profile"}
+    post:
+      operationId: uploadResume
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {$ref: "#/components/schemas/ResumeUpload"}
+      responses:
+        "200":
+          description: Extracted profile
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Profile"}
+  /dashboard:
+    get:
+      operationId: getDashboard
+      responses:
+        "200":
+          description: Real statistics for signed-in users, labeled sample for visitors
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Dashboard"}
+  /sessions:
+    get:
+      operationId: listSessions
+      responses:
+        "200":
+          description: Interview history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Interview"}
+    post:
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InterviewInput"}
+      responses:
+        "200":
+          description: First question
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
+  /sessions/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getSession
+      responses:
+        "200":
+          description: Interview with answer evaluations
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
+    delete:
+      operationId: deleteSession
+      responses:
+        "200":
+          description: Deleted
+  /sessions/{id}/answers:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: submitAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AnswerInput"}
+      responses:
+        "200":
+          description: Updated interview and next question
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
+  /sessions/{id}/finish:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: finishSession
+      responses:
+        "200":
+          description: Completed interview
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
+  /transcribe:
+    post:
+      operationId: transcribe
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {$ref: "#/components/schemas/AudioUpload"}
+      responses:
+        "200":
+          description: Whisper transcript and speech timing
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Transcript"}
+  /sessions/{id}/ratings:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: saveRating
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RatingInput"}
+      responses:
+        "200":
+          description: Updated interview
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Interview"}
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +197,132 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        name: {type: string}
+        email: {type: string}
+        password: {type: string, minLength: 10}
+    User:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        email: {type: string}
+    ResumeUpload:
+      type: object
+      required: [file]
+      properties:
+        file: {type: string, format: binary}
+    AudioUpload:
+      type: object
+      required: [file]
+      properties:
+        file: {type: string, format: binary}
+    Profile:
+      type: object
+      required: [filename, skills, projects, education, certifications, experience]
+      properties:
+        filename: {type: string}
+        skills: {type: array, items: {type: string}}
+        projects: {type: array, items: {type: string}}
+        education: {type: array, items: {type: string}}
+        certifications: {type: array, items: {type: string}}
+        experience: {type: array, items: {type: string}}
+    InterviewInput:
+      type: object
+      required: [category, role]
+      properties:
+        category: {type: string, enum: [technical, hr, behavioral, company-specific]}
+        role: {type: string}
+        company: {type: string}
+        questionCount: {type: integer, minimum: 3, maximum: 10, default: 5}
+    AnswerInput:
+      type: object
+      required: [text, questionIndex]
+      properties:
+        text: {type: string}
+        questionIndex: {type: integer}
+        transcriptId: {type: string}
+    Transcript:
+      type: object
+      required: [id, text, duration, speakingRate, pauses, silenceDuration, fillerWords]
+      properties:
+        id: {type: string}
+        text: {type: string}
+        duration: {type: number}
+        speakingRate: {type: number}
+        pauses: {type: integer}
+        silenceDuration: {type: number}
+        fillerWords: {type: integer}
+    Scores:
+      type: object
+      required: [technicalAccuracy, clarity, completeness, star]
+      properties:
+        technicalAccuracy: {type: number}
+        clarity: {type: number}
+        completeness: {type: number}
+        star: {type: number}
+    Answer:
+      type: object
+      required: [question, text, scores, feedback, improvement, skill]
+      properties:
+        question: {type: string}
+        text: {type: string}
+        scores: {$ref: "#/components/schemas/Scores"}
+        feedback: {type: string}
+        improvement: {type: string}
+        skill: {type: string}
+        speech: {$ref: "#/components/schemas/Transcript"}
+    RatingInput:
+      type: object
+      required: [answerIndex, rater, scores]
+      properties:
+        answerIndex: {type: integer}
+        rater: {type: string}
+        scores: {$ref: "#/components/schemas/Scores"}
+        notes: {type: string}
+    Interview:
+      type: object
+      required: [id, category, role, company, createdAt, status, questionCount, currentQuestion, answers, score, ratings]
+      properties:
+        id: {type: string}
+        category: {type: string}
+        role: {type: string}
+        company: {type: string}
+        createdAt: {type: string}
+        status: {type: string, enum: [active, completed]}
+        questionCount: {type: integer}
+        currentQuestion: {type: string}
+        answers: {type: array, items: {$ref: "#/components/schemas/Answer"}}
+        score: {type: number}
+        ratings: {type: array, items: {$ref: "#/components/schemas/RatingInput"}}
+    Trend:
+      type: object
+      required: [date, score]
+      properties:
+        date: {type: string}
+        score: {type: number}
+    Skill:
+      type: object
+      required: [name, score]
+      properties:
+        name: {type: string}
+        score: {type: number}
+    Dashboard:
+      type: object
+      required: [demo, totalSessions, averageScore, totalAnswers, improvement, trends, skills, recentSessions]
+      properties:
+        demo: {type: boolean}
+        totalSessions: {type: integer}
+        averageScore: {type: number}
+        totalAnswers: {type: integer}
+        improvement: {type: number}
+        trends: {type: array, items: {$ref: "#/components/schemas/Trend"}}
+        skills: {type: array, items: {$ref: "#/components/schemas/Skill"}}
+        recentSessions: {type: array, items: {$ref: "#/components/schemas/Interview"}}
     HealthStatus:
       type: object
       properties:
