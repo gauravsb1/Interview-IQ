@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Answer } from './answer';
+import type { ContextSource } from './contextSource';
 import type { InterviewStatus } from './interviewStatus';
 import type { RatingInput } from './ratingInput';
 
@@ -14,10 +15,12 @@ export interface Interview {
   category: string;
   role: string;
   company: string;
+  companyContext?: string;
   createdAt: string;
   status: InterviewStatus;
   questionCount: number;
   currentQuestion: string;
+  currentContext?: ContextSource[];
   nextQuestionPending?: boolean;
   answers: Answer[];
   score: number;

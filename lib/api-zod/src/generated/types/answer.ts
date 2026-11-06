@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ContextSource } from './contextSource';
 import type { Scores } from './scores';
 import type { Transcript } from './transcript';
 
@@ -16,4 +17,5 @@ export interface Answer {
   improvement: string;
   skill: string;
   speech?: Transcript;
+  contextUsed?: ContextSource[];
 }

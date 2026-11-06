@@ -228,10 +228,19 @@ def sessions():
     company = str(data.get("company", "")).strip()[:150]
     if category == "company-specific" and not company:
         raise ValueError("Enter the target company.")
+    company_context = data.get("companyContext", "")
+    if not isinstance(company_context, str):
+        raise ValueError("Company or job context must be plain text.")
+    company_context = company_context.strip()
+    if len(company_context) > 8000:
+        raise ValueError("Company or job context must be 8,000 characters or fewer.")
     interview = dict(id=str(uuid.uuid4()), role=role, category=category, company=company,
+                     companyContext=company_context,
                      createdAt=datetime.now(timezone.utc).isoformat(), status="active",
                      questionCount=count, answers=[], ratings=[], score=0, currentQuestion="")
-    interview["currentQuestion"] = intelligence.question(g.user["id"], p, interview)
+    question = intelligence.question(g.user["id"], p, interview)
+    interview["currentQuestion"] = question["question"]
+    interview["currentContext"] = question["context"]
     return persist(interview)
 
 
@@ -259,24 +268,31 @@ def answer(sid):
         if not 2 <= len(text) <= 12000:
             raise ValueError("Enter an answer between 2 and 12,000 characters.")
         result = intelligence.evaluate(interview, text)
-        result.update(question=interview["currentQuestion"], text=text)
+        result.update(
+            question=interview["currentQuestion"],
+            text=text,
+            contextUsed=interview.get("currentContext", []),
+        )
         if data.get("transcriptId"):
             speech = storage.get_record(g.user["id"], "transcript", data["transcriptId"])
             if speech:
                 result["speech"] = speech
         interview["answers"].append(result)
         if len(interview["answers"]) >= interview["questionCount"]:
-            interview.update(status="completed", currentQuestion="", nextQuestionPending=False)
+            interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
             return persist(interview)
 
         # Commit the evaluated answer before asking Gemini for another question.
         # A provider outage must not make the candidate submit (and pay to score)
         # the same answer again.
         interview["currentQuestion"] = ""
+        interview["currentContext"] = []
         interview["nextQuestionPending"] = True
         persist(interview)
         try:
-            interview["currentQuestion"] = intelligence.question(g.user["id"], profile(), interview)
+            question = intelligence.question(g.user["id"], profile(), interview)
+            interview["currentQuestion"] = question["question"]
+            interview["currentContext"] = question["context"]
             interview["nextQuestionPending"] = False
         except Exception as exc:
             app.logger.warning("Next interview question unavailable: %s", type(exc).__name__)
@@ -293,7 +309,9 @@ def retry_next_question(sid):
         if interview["status"] != "active" or not interview.get("nextQuestionPending"):
             return jsonify(error="There is no pending question to retry."), 409
         try:
-            interview["currentQuestion"] = intelligence.question(g.user["id"], profile(), interview)
+            question = intelligence.question(g.user["id"], profile(), interview)
+            interview["currentQuestion"] = question["question"]
+            interview["currentContext"] = question["context"]
             interview["nextQuestionPending"] = False
         except Exception as exc:
             app.logger.warning("Next interview question retry unavailable: %s", type(exc).__name__)
@@ -306,7 +324,7 @@ def retry_next_question(sid):
 def finish(sid):
     with _session_locks[hash(sid) % 64]:
         interview = owned_session(sid)
-        interview.update(status="completed", currentQuestion="", nextQuestionPending=False)
+        interview.update(status="completed", currentQuestion="", currentContext=[], nextQuestionPending=False)
         return persist(interview)
 
 

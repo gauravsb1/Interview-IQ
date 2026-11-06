@@ -249,6 +249,7 @@ components:
         category: {type: string, enum: [technical, hr, behavioral, company-specific]}
         role: {type: string}
         company: {type: string}
+        companyContext: {type: string, maxLength: 8000}
         questionCount: {type: integer, minimum: 3, maximum: 10, default: 5}
     AnswerInput:
       type: object
@@ -276,6 +277,13 @@ components:
         clarity: {type: number}
         completeness: {type: number}
         star: {type: number}
+    ContextSource:
+      type: object
+      required: [source, text, similarity]
+      properties:
+        source: {type: string}
+        text: {type: string}
+        similarity: {type: number}
     Answer:
       type: object
       required: [question, text, scores, feedback, improvement, skill]
@@ -287,6 +295,7 @@ components:
         improvement: {type: string}
         skill: {type: string}
         speech: {$ref: "#/components/schemas/Transcript"}
+        contextUsed: {type: array, items: {$ref: "#/components/schemas/ContextSource"}}
     RatingInput:
       type: object
       required: [answerIndex, rater, scores]
@@ -303,10 +312,12 @@ components:
         category: {type: string}
         role: {type: string}
         company: {type: string}
+        companyContext: {type: string}
         createdAt: {type: string}
         status: {type: string, enum: [active, completed]}
         questionCount: {type: integer}
         currentQuestion: {type: string}
+        currentContext: {type: array, items: {$ref: "#/components/schemas/ContextSource"}}
         nextQuestionPending: {type: boolean}
         answers: {type: array, items: {$ref: "#/components/schemas/Answer"}}
         score: {type: number}

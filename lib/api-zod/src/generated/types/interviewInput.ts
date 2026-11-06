@@ -11,6 +11,8 @@ export interface InterviewInput {
   category: InterviewInputCategory;
   role: string;
   company?: string;
+  /** @maxLength 8000 */
+  companyContext?: string;
   /**
      * @minimum 3
      * @maximum 10

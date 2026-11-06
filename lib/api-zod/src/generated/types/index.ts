@@ -9,6 +9,7 @@
 export * from './answer';
 export * from './answerInput';
 export * from './audioUpload';
+export * from './contextSource';
 export * from './credentials';
 export * from './dashboard';
 export * from './healthStatus';

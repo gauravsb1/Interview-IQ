@@ -49,6 +49,8 @@ export interface InterviewInput {
   category: InterviewInputCategory;
   role: string;
   company?: string;
+  /** @maxLength 8000 */
+  companyContext?: string;
   /**
      * @minimum 3
      * @maximum 10
@@ -79,6 +81,12 @@ export interface Scores {
   star: number;
 }
 
+export interface ContextSource {
+  source: string;
+  text: string;
+  similarity: number;
+}
+
 export interface Answer {
   question: string;
   text: string;
@@ -87,6 +95,7 @@ export interface Answer {
   improvement: string;
   skill: string;
   speech?: Transcript;
+  contextUsed?: ContextSource[];
 }
 
 export interface RatingInput {
@@ -109,10 +118,12 @@ export interface Interview {
   category: string;
   role: string;
   company: string;
+  companyContext?: string;
   createdAt: string;
   status: InterviewStatus;
   questionCount: number;
   currentQuestion: string;
+  currentContext?: ContextSource[];
   nextQuestionPending?: boolean;
   answers: Answer[];
   score: number;

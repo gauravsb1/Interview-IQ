@@ -169,6 +169,22 @@ function Room({ id }: { id: string }) {
                 </>
               )}
             </div>
+            {!session.nextQuestionPending && !!session.currentContext?.length && (
+              <details className="rise rounded-2xl border bg-card px-5 py-4" data-testid="details-question-context">
+                <summary className="cursor-pointer text-sm font-semibold">Sources used for this question</summary>
+                <div className="mt-4 space-y-3">
+                  {session.currentContext.map((item, index) => (
+                    <div key={`${item.source}-${index}`} className="rounded-xl bg-secondary p-3">
+                      <p className="text-xs font-semibold">{item.source}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.text}</p>
+                    </div>
+                  ))}
+                  {session.category === "company-specific" && session.companyContext && (
+                    <p className="text-xs text-muted-foreground">Company details were supplied by you and have not been independently verified.</p>
+                  )}
+                </div>
+              </details>
+            )}
 
             <div className="rise rise-1 rounded-3xl border bg-card p-6">
               <div className="flex flex-col items-center gap-3 py-2">

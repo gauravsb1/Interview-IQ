@@ -39,6 +39,19 @@ function AnswerCard({ a, i, open, toggle }: { a: Answer; i: number; open: boolea
             </div>
             <div className="rounded-xl bg-secondary p-4 text-sm"><p className="font-semibold">Feedback</p><p className="mt-1 text-muted-foreground">{a.feedback}</p></div>
             <div className="flex gap-3 rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm"><Lightbulb className="h-4 w-4 shrink-0 text-primary" /><p><b>Next time:</b> {a.improvement}</p></div>
+            {!!a.contextUsed?.length && (
+              <details className="rounded-xl border px-4 py-3" data-testid={`details-answer-context-${i}`}>
+                <summary className="cursor-pointer text-sm font-semibold">Context used for this evaluation</summary>
+                <div className="mt-3 space-y-2">
+                  {a.contextUsed.map((item, index) => (
+                    <div key={`${item.source}-${index}`} className="rounded-lg bg-secondary p-3">
+                      <p className="text-xs font-semibold">{item.source}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
           <div className="space-y-3">
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Skill: <span className="text-primary">{a.skill}</span></p>

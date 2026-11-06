@@ -5,6 +5,7 @@ import { useCreateSession, useGetProfile, getGetProfileQueryKey, getListSessions
 import { Code2, Users, MessagesSquare, Building2, Loader2, Minus, Plus, ArrowRight, FileWarning } from "lucide-react";
 import { PageHeader, RequireAuth } from "@/components/bits";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { errMsg } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ function Form() {
   const [category, setCategory] = useState<InterviewInputCategory>("technical");
   const [role, setRole] = useState("");
   const [company, setCompany] = useState("");
+  const [companyContext, setCompanyContext] = useState("");
   const [count, setCount] = useState(5);
   const [err, setErr] = useState<string | null>(null);
 
@@ -35,7 +37,7 @@ function Form() {
     if (!role.trim()) return setErr("Which role are you preparing for?");
     if (category === "company-specific" && !company.trim()) return setErr("Company-specific practice needs a company name.");
     create.mutate(
-      { data: { category, role: role.trim(), company: company.trim() || undefined, questionCount: count } },
+      { data: { category, role: role.trim(), company: company.trim() || undefined, companyContext: companyContext.trim() || undefined, questionCount: count } },
       {
         onSuccess: (s) => {
           qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
@@ -85,6 +87,19 @@ function Form() {
             <Label htmlFor="company">Company {category !== "company-specific" && <span className="text-muted-foreground">(optional)</span>}</Label>
             <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Monzo" data-testid="input-company" />
           </div>
+        </div>
+        <div className="rise rise-2 space-y-1.5">
+          <Label htmlFor="company-context">Role or company context <span className="text-muted-foreground">(optional)</span></Label>
+          <Textarea
+            id="company-context"
+            value={companyContext}
+            onChange={(e) => setCompanyContext(e.target.value)}
+            maxLength={8000}
+            rows={5}
+            placeholder="Paste a job description or company/product details to ground the questions."
+            data-testid="input-company-context"
+          />
+          <p className="text-xs text-muted-foreground">Saved with this session and used as candidate-provided context, not verified company facts. {companyContext.length}/8000</p>
         </div>
       </div>
       <aside className="rise rise-3 h-fit rounded-3xl bg-sidebar p-6 text-sidebar-foreground">

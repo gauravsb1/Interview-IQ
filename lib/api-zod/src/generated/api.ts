@@ -95,10 +95,16 @@ export const GetDashboardResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -120,7 +126,12 @@ export const GetDashboardResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -143,10 +154,16 @@ export const ListSessionsResponseItem = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -168,7 +185,12 @@ export const ListSessionsResponseItem = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -186,6 +208,8 @@ export const ListSessionsResponseItem = zod.object({
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
 
 
+export const createSessionBodyCompanyContextMax = 8000;
+
 export const createSessionBodyQuestionCountDefault = 5;
 export const createSessionBodyQuestionCountMin = 3;
 export const createSessionBodyQuestionCountMax = 10;
@@ -196,6 +220,7 @@ export const CreateSessionBody = zod.object({
   "category": zod.enum(['technical', 'hr', 'behavioral', 'company-specific']),
   "role": zod.string(),
   "company": zod.string().optional(),
+  "companyContext": zod.string().max(createSessionBodyCompanyContextMax).optional(),
   "questionCount": zod.number().int().min(createSessionBodyQuestionCountMin).max(createSessionBodyQuestionCountMax).default(createSessionBodyQuestionCountDefault)
 })
 
@@ -204,10 +229,16 @@ export const CreateSessionResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -229,7 +260,12 @@ export const CreateSessionResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -255,10 +291,16 @@ export const GetSessionResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -280,7 +322,12 @@ export const GetSessionResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -319,10 +366,16 @@ export const SubmitAnswerResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -344,7 +397,12 @@ export const SubmitAnswerResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -370,10 +428,16 @@ export const FinishSessionResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -395,7 +459,12 @@ export const FinishSessionResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -421,10 +490,16 @@ export const RetryQuestionResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -446,7 +521,12 @@ export const RetryQuestionResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
@@ -499,10 +579,16 @@ export const SaveRatingResponse = zod.object({
   "category": zod.string(),
   "role": zod.string(),
   "company": zod.string(),
+  "companyContext": zod.string().optional(),
   "createdAt": zod.string(),
   "status": zod.enum(['active', 'completed']),
   "questionCount": zod.number().int(),
   "currentQuestion": zod.string(),
+  "currentContext": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional(),
   "nextQuestionPending": zod.boolean().optional(),
   "answers": zod.array(zod.object({
   "question": zod.string(),
@@ -524,7 +610,12 @@ export const SaveRatingResponse = zod.object({
   "pauses": zod.number().int(),
   "silenceDuration": zod.number(),
   "fillerWords": zod.number().int()
-}).optional()
+}).optional(),
+  "contextUsed": zod.array(zod.object({
+  "source": zod.string(),
+  "text": zod.string(),
+  "similarity": zod.number()
+})).optional()
 })),
   "score": zod.number(),
   "ratings": zod.array(zod.object({
