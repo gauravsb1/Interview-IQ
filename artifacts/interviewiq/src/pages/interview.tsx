@@ -51,6 +51,18 @@ function Room({ id }: { id: string }) {
   const allAnswered = !!session && answered >= session.questionCount;
   const timeExpired = remainingSeconds === 0;
 
+  const finishSession = () => {
+    finish.mutate({ id }, {
+      onSuccess: (s) => {
+        draft.clear();
+        qc.setQueryData(getGetSessionQueryKey(id), s);
+        qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        setLocation(`/results/${id}`);
+      },
+    });
+  };
+
   useEffect(() => {
     if (!session?.deadlineAt || session.status !== "active") {
       setRemainingSeconds(null);
@@ -92,6 +104,32 @@ function Room({ id }: { id: string }) {
     if (session?.status === "completed") setLocation(`/results/${id}`);
   }, [session?.status, id, setLocation]);
 
+  useEffect(() => {
+    if (!timeExpired || session?.status !== "active") {
+      timeFinishStarted.current = false;
+      return;
+    }
+    if (rec.state === "recording") {
+      rec.stop();
+      return;
+    }
+    if (
+      rec.state === "requesting" ||
+      text.trim() ||
+      lastBlob ||
+      transcribe.isPending ||
+      submit.isPending ||
+      retryQuestion.isPending ||
+      finish.isPending ||
+      timeFinishStarted.current
+    ) return;
+    timeFinishStarted.current = true;
+    finishSession();
+  }, [
+    timeExpired, session?.status, rec.state, rec.stop, text, lastBlob,
+    transcribe.isPending, submit.isPending, retryQuestion.isPending, finish.isPending,
+  ]);
+
   if (q.isLoading) return <PageSkeleton />;
   if (q.error || !session) return <ErrorState message={errMsg(q.error, "This session could not be loaded.")} onRetry={() => q.refetch()} />;
 
@@ -124,49 +162,11 @@ function Room({ id }: { id: string }) {
     });
   };
 
-  const finishSession = () => {
-    finish.mutate({ id }, {
-      onSuccess: (s) => {
-        draft.clear();
-        qc.setQueryData(getGetSessionQueryKey(id), s);
-        qc.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-        setLocation(`/results/${id}`);
-      },
-    });
-  };
-
   const doFinish = () => {
     if (submit.isPending || transcribe.isPending || rec.state === "recording" || rec.state === "requesting") return;
     if ((text.trim() || lastBlob) && !window.confirm("Finish without submitting this answer? Your unsent text or audio will be discarded.")) return;
     finishSession();
   };
-
-  useEffect(() => {
-    if (!timeExpired || session?.status !== "active") {
-      timeFinishStarted.current = false;
-      return;
-    }
-    if (rec.state === "recording") {
-      rec.stop();
-      return;
-    }
-    if (
-      rec.state === "requesting" ||
-      text.trim() ||
-      lastBlob ||
-      transcribe.isPending ||
-      submit.isPending ||
-      retryQuestion.isPending ||
-      finish.isPending ||
-      timeFinishStarted.current
-    ) return;
-    timeFinishStarted.current = true;
-    finishSession();
-  }, [
-    timeExpired, session?.status, rec.state, rec.stop, text, lastBlob,
-    transcribe.isPending, submit.isPending, retryQuestion.isPending, finish.isPending,
-  ]);
 
   const last = session.answers[session.answers.length - 1];
   const busy = submit.isPending || transcribe.isPending || finish.isPending || retryQuestion.isPending;
