@@ -97,9 +97,12 @@ function Form() {
         <div className="mt-4 flex gap-1">{Array.from({ length: 10 }).map((_, i) => <span key={i} className={cn("h-1 flex-1 rounded-full transition-colors", i < count ? "bg-sidebar-primary" : "bg-sidebar-accent")} />)}</div>
         <p className="mt-4 text-sm text-sidebar-foreground/70">Roughly {count * 2}-{count * 3} minutes. Each answer is evaluated as you go.</p>
         {(err || create.error) && <p className="mt-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-200" data-testid="text-practice-error">{err ?? errMsg(create.error, "Could not create the session.")}</p>}
-        <button type="submit" disabled={create.isPending || !hasResume} className="group mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-sidebar-primary py-3 text-sm font-semibold text-sidebar-primary-foreground hover:opacity-90 disabled:opacity-60" data-testid="button-start-session">
-          {create.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Writing your questions</> : <>Begin interview <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
+        <button type="submit" disabled={profile.isLoading || create.isPending || !hasResume} className="group mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-sidebar-primary py-3 text-sm font-semibold text-sidebar-primary-foreground hover:opacity-90 disabled:opacity-60" data-testid="button-start-session">
+          {profile.isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking saved resume</>
+            : create.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Writing your questions</>
+            : <>Begin interview <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
         </button>
+        {profile.isLoading && <p className="mt-3 text-center text-xs text-sidebar-foreground/60" role="status" data-testid="status-resume-check">Checking for a saved resume before practice can start.</p>}
         {!hasResume && !profile.isLoading && <Link href="/resume" className="mt-3 block text-center text-xs font-semibold text-sidebar-primary underline" data-testid="link-upload-resume-aside">Upload a resume to unlock</Link>}
         {create.isPending && <p className="mt-3 text-center text-xs text-sidebar-foreground/60">Tailoring to your resume can take 10-30 seconds.</p>}
       </aside>
